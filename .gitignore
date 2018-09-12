@@ -1,0 +1,7 @@
+*.o
+*.swp
+a.out
+*.dat
+*.log
+
+exlay_daemon
