@@ -1,11 +1,11 @@
 CC = gcc
-CFLAGS := -Wall
+CFLAGS = -Wall -Wextra -ggdb
 LDFLAGS =
 
-SRC = exlay_daemon.c
+SRC = exlay_daemon.c exlay.c
 OBJ = $(%.o:%.c)
 
-TARGETS = exlay_daemon
+TARGETS = exlay_daemon exlay
 
 .c.o:
 	$(CC) $(CFLAGS) -c $<
