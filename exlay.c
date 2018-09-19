@@ -11,6 +11,22 @@
 
 static void func_exlay_help(int largc, char **largv)
 {
+	if (largc == 1) {
+		fprintf(stderr, "error: need more arguments.\n");
+		goto HELP;
+	}
+
+	if (largc <= 1 || 5 <= largc || strcmp(largv[1], "help") != 0) {
+		fprintf(stderr, "error: invalid command or arguments.\n");
+		goto HELP;
+	}
+
+	if (strcmp(largv[1], "help") == 0 && largc != 2) {
+		fprintf(stderr, "error: invalid arguments.\n");
+		goto HELP;
+	}
+
+HELP:
 	fprintf(stderr, "usage:                             \n");
 	fprintf(stderr, "    exlay help                  -- show this message\n");
 	fprintf(stderr, "    exlay list                  -- show all protocols added to the daemon\n");
@@ -154,14 +170,14 @@ int main(int argc, char **argv)
 
 	for (i = 0; cmd_table[i].cmd != NULL; i++) {
 		if (strcmp(cmd_table[i].cmd, argv[1]) == 0) {
-			fprintf(stderr, "cmd = %s\n", argv[1]);
+			debug_printf(stderr, "cmd = %s\n", argv[1]);
+			cmd_table[i].cmd_func(argc, argv);
 			break;
 		}
 	}
 
 	/* unkown command is specified */
 	if (i == NR_CMDS) {
-		fprintf(stderr, "error: Unknown cmd: %s\n", argv[1]);
 		func_exlay_help(argc, argv);
 	}
 	
