@@ -9,6 +9,75 @@
 
 #include "exlay.h"
 
+static struct sockaddr_in daem_addr_in;
+static int cli_sock;
+
+static int largc;
+static char **largv;
+
+static void print_list_data(struct exlay_hdr *hdr, uint8_t *data)
+{
+	fprintf(stdout, "%s", data);
+}
+
+static void print_info_data(struct exlay_hdr *hdr, uint8_t *data)
+{
+	uint8_t *name = data;
+	uint8_t *info = data + hdr->len_proto_name;
+
+	fprintf(stdout, "Protocol Name: %s\n", name);
+	fprintf(stdout, "Description:\n\n%s", info);
+}
+
+static void print_data(struct exlay_hdr *hdr, uint8_t *data)
+{
+	switch (hdr->cmd) {
+		case CMD_LIST:
+			print_list_data(hdr, data);
+			break;
+		case CMD_INFO:
+			print_info_data(hdr, data);
+			break;
+		default:
+			fprintf(stderr, "unknown commmand: %d\n", hdr->cmd);
+	}
+}
+
+static int send_and_recv_pkt(
+		struct exlay_hdr *hdr, 
+		uint8_t *data, 
+		int *data_len)
+{
+	int ret;
+	socklen_t sk_len;
+	uint8_t buf[EXLAYHDRSIZE + MAXBUFLEN] = {0};
+
+	memcpy(buf, hdr, EXLAYHDRSIZE);
+	memcpy(buf + EXLAYHDRSIZE, data, *data_len);
+
+	ret = sendto(cli_sock, buf, *data_len * EXLAYHDRSIZE, 0,
+			(struct sockaddr *)&daem_addr_in, sizeof(struct sockaddr_in));
+
+	if (ret < 0) {
+		perror("sendto");
+		goto OUT;
+	}
+
+	ret = recvfrom(cli_sock, buf, EXLAYHDRSIZE + MAXBUFLEN, 0,
+			(struct sockaddr *)&daem_addr_in, &sk_len);
+
+	if (ret < 0) {
+		perror("recvfrom");
+		goto OUT;
+	}
+
+	memcpy(hdr, buf, EXLAYHDRSIZE);
+	memcpy(data, buf + EXLAYHDRSIZE, ret);
+
+OUT:
+	return ret;
+}
+
 static void func_exlay_help(int largc, char **largv)
 {
 	if (largc == 1) {
@@ -48,6 +117,28 @@ static void func_exlay_list(int largc, char **largv)
 		.len_proto_name = 0,
 		.len_proto_path = 0,
 	};
+
+	int ret;
+	uint8_t data[MAXBUFLEN] = {0};
+	int data_len = 0;
+
+	ret = send_and_recv_pkt(&hdr, data, &data_len);
+
+	if (hdr.cmd != CMD_LIST) {
+		fprintf(stderr, "invalid response: %d\n", hdr.cmd);
+		goto OUT;
+	}
+
+	switch (hdr.code) {
+		case CODE_OK:
+			print_data(&hdr, data);
+			break;
+		case CODE_NG:
+			fprintf(stderr, "no protocol is added to the daemon\n");
+			break;
+		default:
+			fprintf(stderr, "unknown code: %d\n", hdr.code);
+	}
 
 OUT:
 	return;
@@ -134,13 +225,6 @@ struct exlay_cmd {
 	{"update", func_exlay_update},
 	{NULL, NULL}
 };
-
-static struct sockaddr_in daem_addr_in;
-static int cli_sock;
-static char cmd_buf[MAXCMDLEN + 1];
-
-static int largc;
-static char **largv;
 
 int main(int argc, char **argv) 
 {

@@ -33,7 +33,6 @@ static void func_daem_update(struct exlay_hdr *ndr)
 static struct sockaddr_in daem_addr_in;
 static struct sockaddr_in cli_addr_in;
 static int daem_sock;
-static char cmd_buf[MAXCMDLEN];
 static socklen_t len = sizeof(struct sockaddr_in);
 
 struct daem_cmd {
@@ -66,7 +65,6 @@ int init_daemon(void)
 		return errno;
 	}
 
-	memset(cmd_buf, 0, MAXCMDLEN);
 
 	return 0;
 }
@@ -74,6 +72,7 @@ int init_daemon(void)
 int main(void)
 {
 	int ret;
+	uint8_t buf[MAXBUFLEN] = {0};
 
 	if (init_daemon() != 0) {
 		return EXIT_FAILURE;
@@ -84,13 +83,13 @@ int main(void)
 		int i;
 		struct exlay_hdr *p;
 
-		ret = recvfrom(daem_sock, cmd_buf, MAXCMDLEN, 0, 
+		ret = recvfrom(daem_sock, buf, MAXCMDLEN, 0, 
 				(struct sockaddr *)&cli_addr_in, &len);
 		if (ret < 0) {
 			perror("recvfrom");
 		}
 
-		p = (struct exlay_hdr *)cmd_buf;
+		p = (struct exlay_hdr *)buf;
 
 		for (i = 0; daem_cmd_table[i].cmd != CMD_UNKNOWN; i++) {
 			if (daem_cmd_table[i].cmd == p->cmd) {
