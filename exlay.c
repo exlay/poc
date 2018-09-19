@@ -12,29 +12,17 @@
 static void func_exlay_help(int largc, char **largv)
 {
 	if (largc == 1) {
-<<<<<<< HEAD
 		fprintf(stderr, "error: need more arguments.\n");
-=======
-		fprintf(stderr, "syntax error\n");
->>>>>>> ee07cb8689357d7cd06ce3194a584a11149e5100
 		goto HELP;
 	}
 
 	if (largc <= 1 || 5 <= largc || strcmp(largv[1], "help") != 0) {
-<<<<<<< HEAD
 		fprintf(stderr, "error: invalid command or arguments.\n");
-=======
-		fprintf(stderr, "syntax error\n");
->>>>>>> ee07cb8689357d7cd06ce3194a584a11149e5100
 		goto HELP;
 	}
 
 	if (strcmp(largv[1], "help") == 0 && largc != 2) {
-<<<<<<< HEAD
 		fprintf(stderr, "error: invalid arguments.\n");
-=======
-		fprintf(stderr, "syntax error\n");
->>>>>>> ee07cb8689357d7cd06ce3194a584a11149e5100
 		goto HELP;
 	}
 
