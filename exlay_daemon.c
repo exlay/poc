@@ -19,13 +19,17 @@ struct proto_info list_head;
 
 void add_to_list(struct proto_info *p)
 {
+	p->prev = &list_head;
 	p->next = list_head.next;
+	list_head.next->prev = p;
 	list_head.next = p;
 }
 
 void del_from_list(struct proto_info *p)
 {
-
+	p->prev->next = p->next;
+	p->next->prev = p->prev;
+	p->prev = p->next = NULL;
 }
 
 struct proto_info *get_list_entry(const char *name)
@@ -137,6 +141,50 @@ static void func_daem_info(void *buf, int len)
 static void func_daem_del(void *buf, int len)
 {
 	debug_printf("cmd = del\n");
+	struct exlay_hdr *hdr = (struct exlay_hdr *)buf;
+	uint8_t *data = (uint8_t *)buf + EXLAYHDRSIZE;
+	char *prot_name = (char *)(data);
+	int ret;
+
+	if (hdr->code != CODE_REQ) {
+		/* invalid request pkt */
+		hdr->code = CODE_NG;
+		memset(data, 0, len - EXLAYHDRSIZE);
+		/* XXX error message should be written */
+		goto OUT;
+	} 
+
+	struct proto_info *prt;
+	/* whether the protocol name to be deleted has really exist or not */
+	for (prt = list_head.next; prt != &list_head; prt = prt->next) {
+		if (strcmp(prt->name, prot_name) == 0) {
+			/* found */
+			break;
+		}
+	}
+
+	if (prt == &list_head) {
+		hdr->code = CODE_NG;
+		goto OUT;
+	}
+
+	prot_ctr--;
+	del_from_list(prt);
+	debug_printf("prot %s (%s) was successfully removed\n", 
+			prt->name, prt->path);
+	free(prt);
+	memset(data, 0, hdr->len_proto_name);
+
+	hdr->code = CODE_OK;
+
+OUT:
+	ret = sendto(daem_sock, buf, EXLAYHDRSIZE + strlen((char *)data), 0, 
+			(struct sockaddr *)&cli_addr_in, sk_len);
+
+	if (ret < 0) {
+		perror("sendto");
+	}
+	return;
 }
 static void func_daem_update(void *buf, int len)
 {
@@ -208,6 +256,9 @@ int main(void)
 				daem_cmd_table[i].cmd_func(buf, ret);
 				break;
 			}
+		}
+		if (daem_cmd_table[i].cmd == CMD_UNKNOWN) {
+			fprintf(stderr, "unknown command\n");
 		}
 	}
 

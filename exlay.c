@@ -227,6 +227,29 @@ static void func_exlay_del(int largc, char **largv)
 		.len_proto_path = 0,
 	};
 
+	int ret;
+	uint8_t data[MAXPKTSIZE] = {0};
+	int data_len = hdr.len_proto_name + hdr.len_proto_path;
+	
+	memcpy(data, largv[2], hdr.len_proto_name);
+
+	ret = send_and_recv_pkt(&hdr, data, &data_len);
+
+	if (hdr.cmd != CMD_DEL) {
+		fprintf(stderr, "operation not supported\n");
+		goto OUT;
+	}
+
+	switch (hdr.code) {
+		case CODE_OK:
+			break;
+		case CODE_NG:
+			print_data(&hdr, data);
+			break;
+		default:
+			fprintf(stderr, "invalid code %d\n", hdr.code);
+	}
+
 OUT:
 	return;
 }
