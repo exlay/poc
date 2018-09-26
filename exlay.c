@@ -6,18 +6,16 @@
 #include <errno.h>
 #include <string.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include "exlay.h"
 
 static struct sockaddr_in daem_addr_in;
 static int cli_sock;
 
-static int largc;
-static char **largv;
-
 static void print_list_data(struct exlay_hdr *hdr, uint8_t *data)
 {
-	fprintf(stdout, "%s", data);
+	fprintf(stdout, "Protocol List: \n%s", data);
 }
 
 static void print_info_data(struct exlay_hdr *hdr, uint8_t *data)
@@ -49,14 +47,14 @@ static int send_and_recv_pkt(
 		int *data_len)
 {
 	int ret;
-	socklen_t sk_len;
+	socklen_t sk_len = sizeof(struct sockaddr_in);
 	uint8_t buf[EXLAYHDRSIZE + MAXBUFLEN] = {0};
 
 	memcpy(buf, hdr, EXLAYHDRSIZE);
 	memcpy(buf + EXLAYHDRSIZE, data, *data_len);
 
-	ret = sendto(cli_sock, buf, *data_len * EXLAYHDRSIZE, 0,
-			(struct sockaddr *)&daem_addr_in, sizeof(struct sockaddr_in));
+	ret = sendto(cli_sock, buf, EXLAYHDRSIZE + *data_len, 0,
+			(struct sockaddr *)&daem_addr_in, sk_len);
 
 	if (ret < 0) {
 		perror("sendto");
@@ -65,6 +63,8 @@ static int send_and_recv_pkt(
 
 	ret = recvfrom(cli_sock, buf, EXLAYHDRSIZE + MAXBUFLEN, 0,
 			(struct sockaddr *)&daem_addr_in, &sk_len);
+
+	*data_len = ret;
 
 	if (ret < 0) {
 		perror("recvfrom");
@@ -119,7 +119,7 @@ static void func_exlay_list(int largc, char **largv)
 	};
 
 	int ret;
-	uint8_t data[MAXBUFLEN] = {0};
+	uint8_t data[MAXPKTSIZE] = {0};
 	int data_len = 0;
 
 	ret = send_and_recv_pkt(&hdr, data, &data_len);
@@ -139,7 +139,6 @@ static void func_exlay_list(int largc, char **largv)
 		default:
 			fprintf(stderr, "unknown code: %d\n", hdr.code);
 	}
-
 OUT:
 	return;
 }
@@ -157,6 +156,11 @@ static void func_exlay_add(int largc, char **largv)
 		.len_proto_path = strlen(largv[3]),
 	};
 
+	int ret;
+	uint8_t data[MAXPKTSIZE] = {0};
+	int data_len = hdr.len_proto_name + hdr.len_proto_path;
+
+	ret = send_and_recv_pkt(&hdr, data, &data_len);
 OUT:
 	return;
 }
@@ -235,6 +239,10 @@ int main(int argc, char **argv)
 		return errno;
 	}
 
+	daem_addr_in.sin_family = AF_INET;
+	daem_addr_in.sin_port = DAEMON_PORT;
+	inet_aton("127.0.0.1", &daem_addr_in.sin_addr);
+
 	/*
 	 * argc must be 2, 3, or 4
 	 * i.e.,
@@ -254,7 +262,7 @@ int main(int argc, char **argv)
 
 	for (i = 0; cmd_table[i].cmd != NULL; i++) {
 		if (strcmp(cmd_table[i].cmd, argv[1]) == 0) {
-			debug_printf(stderr, "cmd = %s\n", argv[1]);
+			debug_printf("cmd = %s\n", argv[1]);
 			cmd_table[i].cmd_func(argc, argv);
 			break;
 		}

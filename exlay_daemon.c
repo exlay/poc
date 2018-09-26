@@ -9,35 +9,96 @@
 
 #include "exlay.h"
 
-static void func_daem_help(struct exlay_hdr *ndr)
-{
-}
-static void func_daem_list(struct exlay_hdr *ndr)
-{
-}
-
-static void func_daem_add(struct exlay_hdr *ndr)
-{
-}
-
-static void func_daem_info(struct exlay_hdr *ndr)
-{
-}
-static void func_daem_del(struct exlay_hdr *ndr)
-{
-}
-static void func_daem_update(struct exlay_hdr *ndr)
-{
-}
-
 static struct sockaddr_in daem_addr_in;
-static struct sockaddr_in cli_addr_in;
 static int daem_sock;
-static socklen_t len = sizeof(struct sockaddr_in);
+static socklen_t sk_len = sizeof(struct sockaddr_in);
+static int prot_ctr = 0;
+static struct sockaddr_in cli_addr_in;
+
+struct proto_info proto_info_list[MAXNRPROT] = {0};
+
+
+static void func_daem_list(void *buf)
+{
+	debug_printf("cmd = list\n");
+	struct exlay_hdr *hdr = (struct exlay_hdr *)buf;
+	uint8_t *data = (uint8_t *)buf + EXLAYHDRSIZE;
+
+	if (hdr->code != CODE_REQ) {
+		/* invalid request pkt */
+		goto OUT;
+	} 
+
+	hdr->code = CODE_OK;
+
+	int i;
+	uint8_t *p;
+	for (i = 0, p = data; i < prot_ctr; i++) {
+		memcpy(p, proto_info_list[i].name, strlen(proto_info_list[i].name));
+		p += strlen(proto_info_list[i].name);
+	}
+
+	int ret;
+	ret = sendto(daem_sock, buf, EXLAYHDRSIZE + strlen((char *)data), 0, 
+			(struct sockaddr *)&cli_addr_in, sk_len);
+
+	if (ret < 0) {
+		perror("sendto");
+	}
+
+OUT:
+	return;
+}
+
+static void func_daem_add(void *buf)
+{
+	debug_printf("cmd = add\n");
+	struct exlay_hdr *hdr = (struct exlay_hdr *)buf;
+	uint8_t *data = (uint8_t *)buf + EXLAYHDRSIZE;
+
+	if (hdr->code != CODE_REQ) {
+		/* invalid request pkt */
+		goto OUT;
+	} 
+
+	hdr->code = CODE_OK;
+
+	int i;
+	uint8_t *p;
+	for (i = 0, p = data; i < prot_ctr; i++) {
+		memcpy(p, proto_info_list[i].name, strlen(proto_info_list[i].name));
+		p += strlen(proto_info_list[i].name);
+	}
+
+	int ret;
+	ret = sendto(daem_sock, buf, EXLAYHDRSIZE + strlen((char *)data), 0, 
+			(struct sockaddr *)&cli_addr_in, sk_len);
+
+	if (ret < 0) {
+		perror("sendto");
+	}
+
+OUT:
+	return;
+}
+
+static void func_daem_info(void *buf)
+{
+	debug_printf("cmd = info\n");
+}
+static void func_daem_del(void *buf)
+{
+	debug_printf("cmd = del\n");
+}
+static void func_daem_update(void *buf)
+{
+	debug_printf("cmd = update\n");
+}
+
 
 struct daem_cmd {
 	uint8_t cmd;
-	void (*cmd_func)(struct exlay_hdr *hdr);
+	void (*cmd_func)(void *buf);
 } daem_cmd_table[NR_DAEM_CMDS + 1] = {
 	{CMD_LIST,    func_daem_list},
 	{CMD_ADD,     func_daem_add},
@@ -72,7 +133,7 @@ int init_daemon(void)
 int main(void)
 {
 	int ret;
-	uint8_t buf[MAXBUFLEN] = {0};
+	uint8_t buf[MAXPKTSIZE] = {0};
 
 	if (init_daemon() != 0) {
 		return EXIT_FAILURE;
@@ -83,17 +144,18 @@ int main(void)
 		int i;
 		struct exlay_hdr *p;
 
-		ret = recvfrom(daem_sock, buf, MAXCMDLEN, 0, 
-				(struct sockaddr *)&cli_addr_in, &len);
+		ret = recvfrom(daem_sock, buf, MAXPKTSIZE, 0, 
+				(struct sockaddr *)&cli_addr_in, &sk_len);
 		if (ret < 0) {
 			perror("recvfrom");
 		}
 
 		p = (struct exlay_hdr *)buf;
+		print_exlay_hdr(p);
 
 		for (i = 0; daem_cmd_table[i].cmd != CMD_UNKNOWN; i++) {
 			if (daem_cmd_table[i].cmd == p->cmd) {
-				fprintf(stderr, "cmd = %d\n", p->cmd);
+				daem_cmd_table[i].cmd_func(buf);
 				break;
 			}
 		}
