@@ -68,6 +68,11 @@ struct exlay_hdr {
 
 #define CODE_REQ 0x00
 #define CODE_OK  0x01
+#define CODE_INVREQ 0x02
+#define CODE_NEMPTY 0x03
+#define CODE_DUP 0x04
+#define CODE_NMEM 0x05
+#define CODE_NEXIST 0x06
 #define CODE_NG  0xff
 
 #define NR_CMDS 6

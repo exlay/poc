@@ -32,10 +32,6 @@ void del_from_list(struct proto_info *p)
 	p->prev = p->next = NULL;
 }
 
-struct proto_info *get_list_entry(const char *name)
-{
-	return NULL;
-}
 
 static void func_daem_list(void *buf, int len)
 {
@@ -76,21 +72,22 @@ static void func_daem_add(void *buf, int len)
 	debug_printf("cmd = add\n");
 	struct exlay_hdr *hdr = (struct exlay_hdr *)buf;
 	uint8_t *data = (uint8_t *)buf + EXLAYHDRSIZE;
-	char *prot_name = (char *)(data);
-	char *prot_path = (char *)(data + hdr->len_proto_name);
-	char *prot_desc = (char *)(data + hdr->len_proto_name + hdr->len_proto_path);
+	char prot_name[MAXPROTNAMELEN] = {0};
+	char prot_path[MAXPROTPATHLEN] = {0};
+	memcpy(prot_name, data, hdr->len_proto_name);
+	memcpy(prot_path, data + hdr->len_proto_name, hdr->len_proto_path);
 	int ret;
 
 	if (hdr->code != CODE_REQ) {
 		/* invalid request pkt */
-		hdr->code = CODE_NG;
+		hdr->code = CODE_INVREQ;
 		memset(data, 0, len - EXLAYHDRSIZE);
 		/* XXX error message should be written */
 		goto OUT;
 	} 
 
 	if (prot_ctr >= MAXNRPROT) {
-		hdr->code = CODE_NG;
+		hdr->code = CODE_NEMPTY;
 		memset(data, 0, len - EXLAYHDRSIZE);
 		/* XXX error message should be written */
 		goto OUT;
@@ -100,7 +97,8 @@ static void func_daem_add(void *buf, int len)
 	/* whether the protocol name to be added has already exist or not */
 	for (prt = list_head.next; prt != &list_head; prt = prt->next) {
 		if (strcmp(prt->name, prot_name) == 0) {
-			hdr->code = CODE_NG;
+			hdr->code = CODE_DUP;
+			memset(data, 0, len - EXLAYHDRSIZE);
 			/* XXX error message should be written */
 			goto OUT;
 		}
@@ -108,15 +106,13 @@ static void func_daem_add(void *buf, int len)
 	struct proto_info *new_prt;
 	new_prt = (struct proto_info *)malloc(sizeof(struct proto_info));
 	if (new_prt == NULL) {
-		hdr->code = CODE_NG;
+		hdr->code = CODE_NMEM;
 		memset(data, 0, len - EXLAYHDRSIZE);
 		/* XXX error message should be written */
 		goto OUT;
 	}
 	memcpy(new_prt->name, prot_name, hdr->len_proto_name);
 	memcpy(new_prt->path, prot_path, hdr->len_proto_path);
-	memcpy(new_prt->desc, prot_desc, 
-			len - EXLAYHDRSIZE - hdr->len_proto_name - hdr->len_proto_path);
 	prot_ctr++;
 	add_to_list(new_prt);
 	debug_printf("prot %s (%s) was successfully added\n", 
@@ -137,6 +133,9 @@ OUT:
 static void func_daem_info(void *buf, int len)
 {
 	debug_printf("cmd = info\n");
+	/*
+	 * XXX: PENDING
+	 * */
 }
 static void func_daem_del(void *buf, int len)
 {
@@ -148,7 +147,7 @@ static void func_daem_del(void *buf, int len)
 
 	if (hdr->code != CODE_REQ) {
 		/* invalid request pkt */
-		hdr->code = CODE_NG;
+		hdr->code = CODE_INVREQ;
 		memset(data, 0, len - EXLAYHDRSIZE);
 		/* XXX error message should be written */
 		goto OUT;
@@ -164,7 +163,7 @@ static void func_daem_del(void *buf, int len)
 	}
 
 	if (prt == &list_head) {
-		hdr->code = CODE_NG;
+		hdr->code = CODE_NEXIST;
 		goto OUT;
 	}
 
@@ -189,6 +188,50 @@ OUT:
 static void func_daem_update(void *buf, int len)
 {
 	debug_printf("cmd = update\n");
+	struct exlay_hdr *hdr = (struct exlay_hdr *)buf;
+	uint8_t *data = (uint8_t *)buf + EXLAYHDRSIZE;
+	char prot_name[MAXPROTNAMELEN] = {0};
+	char prot_path[MAXPROTPATHLEN] = {0};
+	memcpy(prot_name, data, hdr->len_proto_name);
+	memcpy(prot_path, data + hdr->len_proto_name, hdr->len_proto_path);
+	int ret;
+
+	if (hdr->code != CODE_REQ) {
+		/* invalid request pkt */
+		hdr->code = CODE_INVREQ;
+		memset(data, 0, len - EXLAYHDRSIZE);
+		/* XXX error message should be written */
+		goto OUT;
+	} 
+
+	struct proto_info *prt;
+	/* whether the protocol name to be added has already exist or not */
+	for (prt = list_head.next; prt != &list_head; prt = prt->next) {
+		if (strcmp(prt->name, prot_name) == 0) {
+			/* found */
+			break;
+		}
+	}
+
+	if (prt == &list_head) {
+		hdr->code = CODE_NEXIST;
+		goto OUT;
+	}
+
+	memcpy(prt->path, prot_path, hdr->len_proto_path);
+	debug_printf("prot %s (%s) was successfully updated\n", 
+			prt->name, prt->path);
+
+	hdr->code = CODE_OK;
+
+OUT:
+	ret = sendto(daem_sock, buf, EXLAYHDRSIZE + strlen((char *)data), 0, 
+			(struct sockaddr *)&cli_addr_in, sk_len);
+
+	if (ret < 0) {
+		perror("sendto");
+	}
+	return;
 }
 
 

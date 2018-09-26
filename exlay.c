@@ -13,6 +13,32 @@
 static struct sockaddr_in daem_addr_in;
 static int cli_sock;
 
+static void print_code(uint8_t code)
+{
+	switch (code) {
+		case CODE_INVREQ:
+			fprintf(stderr, "error: Invalid request\n");
+			break;
+		case CODE_NEMPTY:
+			fprintf(stderr, "error: Some protocols should be deleted from the list\n");
+			break;
+		case CODE_DUP:
+			fprintf(stderr, "error: Dupulicate protocol name\n");
+			break;
+		case CODE_NMEM:
+			fprintf(stderr, "error: Daemon cannot allocate memory\n");
+			break;
+		case CODE_NEXIST:
+			fprintf(stderr, "error: No sucn protocol in the list\n");
+			break;
+		case CODE_NG:
+			fprintf(stderr, "error: Something wrong with exlay daemon\n");
+			break;
+		default:
+			fprintf(stderr, "error: Unknown error code\n");
+	}
+}
+
 static void print_list_data(struct exlay_hdr *hdr, uint8_t *data)
 {
 	fprintf(stdout, "Protocol List: \n%s", data);
@@ -145,11 +171,8 @@ static void func_exlay_list(int largc, char **largv)
 		case CODE_OK:
 			print_data(&hdr, data);
 			break;
-		case CODE_NG:
-			fprintf(stderr, "no protocol is added to the daemon\n");
-			break;
 		default:
-			fprintf(stderr, "unknown code: %d\n", hdr.code);
+			print_code(hdr.code);
 	}
 OUT:
 	return;
@@ -185,11 +208,8 @@ static void func_exlay_add(int largc, char **largv)
 	switch (hdr.code) {
 		case CODE_OK:
 			break;
-		case CODE_NG:
-			print_data(&hdr, data);
-			break;
 		default:
-			fprintf(stderr, "invalid code %d\n", hdr.code);
+			print_code(hdr.code);
 	}
 
 OUT:
@@ -243,11 +263,8 @@ static void func_exlay_del(int largc, char **largv)
 	switch (hdr.code) {
 		case CODE_OK:
 			break;
-		case CODE_NG:
-			print_data(&hdr, data);
-			break;
 		default:
-			fprintf(stderr, "invalid code %d\n", hdr.code);
+			print_code(hdr.code);
 	}
 
 OUT:
@@ -266,6 +283,27 @@ static void func_exlay_update(int largc, char **largv)
 		.len_proto_name = strlen(largv[2]),
 		.len_proto_path = strlen(largv[3]),
 	};
+
+	int ret;
+	uint8_t data[MAXPKTSIZE] = {0};
+	int data_len = hdr.len_proto_name + hdr.len_proto_path;
+	
+	memcpy(data, largv[2], hdr.len_proto_name);
+	memcpy(data + hdr.len_proto_name, largv[3], hdr.len_proto_path);
+
+	ret = send_and_recv_pkt(&hdr, data, &data_len);
+
+	if (hdr.cmd != CMD_UPDATE) {
+		fprintf(stderr, "operation not supported\n");
+		goto OUT;
+	}
+
+	switch (hdr.code) {
+		case CODE_OK:
+			break;
+		default:
+			print_code(hdr.code);
+	}
 
 OUT:
 	return;
