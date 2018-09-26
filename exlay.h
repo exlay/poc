@@ -26,8 +26,11 @@
 
 
 struct proto_info {
+	struct proto_info *next;
 	char name[MAXPROTNAMELEN];
-
+	char path[MAXPROTPATHLEN];
+	time_t ctime;
+	char desc[MAXBUFLEN];
 	//struct netdev_ops *exlay_ops;
 };
 

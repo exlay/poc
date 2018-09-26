@@ -27,6 +27,10 @@ static void print_info_data(struct exlay_hdr *hdr, uint8_t *data)
 	fprintf(stdout, "Description:\n\n%s", info);
 }
 
+static void print_add_data(struct exlay_hdr *hdr, uint8_t *data)
+{
+	fprintf(stderr, "%s\n", (char *)data);
+}
 static void print_data(struct exlay_hdr *hdr, uint8_t *data)
 {
 	switch (hdr->cmd) {
@@ -35,6 +39,9 @@ static void print_data(struct exlay_hdr *hdr, uint8_t *data)
 			break;
 		case CMD_INFO:
 			print_info_data(hdr, data);
+			break;
+		case CMD_ADD:
+			print_add_data(hdr, data);
 			break;
 		default:
 			fprintf(stderr, "unknown commmand: %d\n", hdr->cmd);
@@ -48,12 +55,12 @@ static int send_and_recv_pkt(
 {
 	int ret;
 	socklen_t sk_len = sizeof(struct sockaddr_in);
-	uint8_t buf[EXLAYHDRSIZE + MAXBUFLEN] = {0};
+	uint8_t pkt[MAXPKTSIZE] = {0};
 
-	memcpy(buf, hdr, EXLAYHDRSIZE);
-	memcpy(buf + EXLAYHDRSIZE, data, *data_len);
+	memcpy(pkt, hdr, EXLAYHDRSIZE);
+	memcpy(pkt + EXLAYHDRSIZE, data, *data_len);
 
-	ret = sendto(cli_sock, buf, EXLAYHDRSIZE + *data_len, 0,
+	ret = sendto(cli_sock, pkt, EXLAYHDRSIZE + *data_len, 0,
 			(struct sockaddr *)&daem_addr_in, sk_len);
 
 	if (ret < 0) {
@@ -61,7 +68,9 @@ static int send_and_recv_pkt(
 		goto OUT;
 	}
 
-	ret = recvfrom(cli_sock, buf, EXLAYHDRSIZE + MAXBUFLEN, 0,
+	memset(pkt, 0, MAXPAYLSIZE);
+
+	ret = recvfrom(cli_sock, pkt, MAXPKTSIZE, 0,
 			(struct sockaddr *)&daem_addr_in, &sk_len);
 
 	*data_len = ret;
@@ -71,8 +80,11 @@ static int send_and_recv_pkt(
 		goto OUT;
 	}
 
-	memcpy(hdr, buf, EXLAYHDRSIZE);
-	memcpy(data, buf + EXLAYHDRSIZE, ret);
+   	memset(hdr, 0, EXLAYHDRSIZE);
+	memset(data, 0, ret - EXLAYHDRSIZE);
+
+	memcpy(hdr, pkt, EXLAYHDRSIZE);
+	memcpy(data, pkt + EXLAYHDRSIZE, ret);
 
 OUT:
 	return ret;
@@ -159,8 +171,27 @@ static void func_exlay_add(int largc, char **largv)
 	int ret;
 	uint8_t data[MAXPKTSIZE] = {0};
 	int data_len = hdr.len_proto_name + hdr.len_proto_path;
+	
+	memcpy(data, largv[2], hdr.len_proto_name);
+	memcpy(data + hdr.len_proto_name, largv[3], hdr.len_proto_path);
 
 	ret = send_and_recv_pkt(&hdr, data, &data_len);
+
+	if (hdr.cmd != CMD_ADD) {
+		fprintf(stderr, "operation not supported\n");
+		goto OUT;
+	}
+
+	switch (hdr.code) {
+		case CODE_OK:
+			break;
+		case CODE_NG:
+			print_data(&hdr, data);
+			break;
+		default:
+			fprintf(stderr, "invalid code %d\n", hdr.code);
+	}
+
 OUT:
 	return;
 }
