@@ -11,6 +11,7 @@
 #include <netinet/udp.h>
 
 #include "exlay.h"
+#include "protocols/include/protocol.h"
 
 int main(void)
 {
