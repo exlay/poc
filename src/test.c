@@ -17,7 +17,10 @@ int main(void)
 	uint16_t udp_port = htons(40000);
 	uint8_t ipv4_addr[4];
 	inet_pton(AF_INET, "192.168.10.11", ipv4_addr);
+	uint8_t ipv6_addr[16];
+	inet_pton(AF_INET6, "2001:200:0:6813:abcd::3", ipv6_addr);
 	uint8_t ipv4_protocol = htons(17);
+	uint8_t ipv6_protocol = htons(17);
 	uint16_t ether_type = htons(0x0800);
 	
 	struct ifreq ifr;
@@ -52,6 +55,13 @@ int main(void)
 	ipv4.nxt_type = (uint8_t *)malloc(ipv4.nxt_type_size);
 	memcpy(ipv4.nxt_type, &ipv4_protocol, ipv4.nxt_type_size);
 
+	ipv6.bind_size = 16; /* ipv6 address is 128-bit field */
+	ipv6.binding = (uint8_t *)malloc(ipv6.bind_size);
+	memcpy(ipv6.binding, ipv6_addr, ipv6.bind_size);
+	ipv6.nxt_type_size = 1; /* ipv6 protocol is 8-bit field */
+	ipv6.nxt_type = (uint8_t *)malloc(ipv6.nxt_type_size);
+	memcpy(ipv6.nxt_type, &ipv6_protocol, ipv6.nxt_type_size);
+
 	ether.bind_size = 6; /* mac address is 48-bit field */
 	ether.binding = (uint8_t *)malloc(ether.bind_size);
 	memcpy(ether.binding, ifr.ifr_hwaddr.sa_data, ether.bind_size);
@@ -69,6 +79,10 @@ int main(void)
 	}
 	putchar('\n');
 
+	for (unsigned int i = 0; i < ipv6.bind_size; i++) {
+		printf("%02x ", ipv6.binding[i]);
+	}
+	putchar('\n');
 	
 	for (unsigned int i = 0; i < ether.bind_size; i++) {
 		printf("%02x ", ether.binding[i]);

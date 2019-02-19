@@ -9,3 +9,7 @@ tags
 
 exlay_daemon
 exlay
+test
+
+build/
+bin/
