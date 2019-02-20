@@ -3,7 +3,7 @@ CFLAGS = -Wall -Wextra -ggdb -g3 -MMD -MP
 CFLAGS += -DDEBUG
 LDFLAGS =
 
-TARGETS = exlay_daemon exlay test
+TARGETS = exlay_daemon exlay 
 SRCDIRS = ./src
 OBJDIR = ./build
 BINDIR = ./bin
