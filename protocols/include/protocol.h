@@ -4,7 +4,7 @@
  * at first, I implement IPv4, ARP, and Ethernet */
 /* this is for protocol developer */
 struct protobj {
-	uint8_t *name;
+	char *name;
 	uint8_t bind_size;
 	int (*d_input)(uint8_t *data, uint32_t msg_len);
 	int (*d_output)(uint8_t *data, uint32_t msg_len);

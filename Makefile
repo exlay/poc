@@ -27,6 +27,9 @@ DEPFS = $(SRCFS:%.c=%.d)
 all: $(BINS)
 
 $(BINDIR)/%: $(OBJDIR)/%.o
+ifneq "$(wildcard $(BINDIR))" "$(BINDIR)"
+	@-mkdir $(BINDIR)
+endif
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 $(OBJDIR)/%.o: $(SRCDIRS)/%.c
