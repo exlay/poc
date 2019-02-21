@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
-#include "test_ip4.h"
+#include "test_ipv4.h"
 #include "../include/protocol.h"
 
 static int test_ipv4_in(uint8_t *data, uint32_t msg_len) {

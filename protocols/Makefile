@@ -6,36 +6,36 @@ LDFLAGS =
 BASES := $(filter-out include Makefile lib,$(wildcard *))
 
 LINKDIR := $(CURDIR)/lib
-SRCDIRS := $(BASES)
-OBJDIRS := $(BASES)
-LIBDIRS := $(BASES)
 
-DEPS := $(BASES:%=%.d)
-OBJS := $(BASES:%=%.o)
-SRCS := $(BASES:%=%.c)
-LIBS := $(BASES:%=%.so)
-LINKS := $(addprefix $(LINKDIR),$(BASES:%=lib%.so))
+OBJS := $(join $(addsuffix /,$(BASES)),$(BASES:%=%.o))
+DEPS := $(OBJS:%.o=%.d)
+SRCS := $(OBJS:%.o=%.c)
+LIBS := $(OBJS:%.o=%.so)
+LINKS := $(addprefix $(LINKDIR)/lib,$(notdir $(OBJS:%.o=%.so)))
+LINKNAME := $(notdir $(LINKS))
 
 RM = rm -rf
+LN = ln -sf
+
+.PHONY: clean tags
 
 all: $(LINKS)
 ifneq "$(LINKDIR)" "$(LINKDIR)"
 	@-mkdir $(LINKDIR)
 endif
 
-$(LIBDIRS)/%.so: $(OBJDIRS)/%.o
-	$(CC) -shared -Wl,-soname,$@ -o $@ $^
+$(LINKS): $(LIBS)
+	$(LN) ../$< $@
 
-$(OBJDIRS)/%.o: $(SRCDIRS)/%.c
+$(LIBS): %.so: %.o
+	$(CC) -shared -Wl,-soname,$(LINKDIR)/lib$(notdir $@) -o $@ $^
+
+$(OBJS): %.o: %.c
 	$(CC) $(CFLAGS) -fPIC -o $@ -c $<
 
-tag: tags cscope.out
+tags: tags cscope.out
 	ctags -R
 	cscope -Rb
-
-print:
-	@echo LIBS = $(LIBS)
-	@echo LINKS = $(LINKS)
 
 clean:
 	$(RM) $(OBJS) $(DEPS) $(LINKS) $(LIBS)

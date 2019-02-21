@@ -1,6 +1,5 @@
 #include <sys/types.h>
 #include <stdint.h>
-#include "protocol.h"
 
 struct t_iphdr {
 #if __BYTE_ORDER == __LITTLE_ENDIAN
@@ -20,10 +19,4 @@ struct t_iphdr {
 	uint16_t check;
 	uint32_t saddr;
 	uint32_t daddr;
-};
-
-/* this object is registered to exlay system */
-struct proto_obj t_ip {
-	.proto_name = "test_ipv4",
-	.bind_size = 
 };
