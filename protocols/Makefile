@@ -20,11 +20,11 @@ LN = ln -sf
 .PHONY: clean tags
 
 all: $(LINKS)
-ifneq "$(LINKDIR)" "$(LINKDIR)"
-	@-mkdir $(LINKDIR)
-endif
 
 $(LINKS): $(LIBS)
+ifneq "$(wildcard $(LINKDIR))" "$(LINKDIR)"
+	@-mkdir $(LINKDIR)
+endif
 	$(LN) ../$< $@
 
 $(LIBS): %.so: %.o
