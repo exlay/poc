@@ -3,7 +3,7 @@
 #include <unistd.h>
 
 #include "test_arp.h"
-#include "../include/protocol.h"
+#include "protocol.h"
 
 static int test_arp_in(uint8_t *data, uint32_t msg_len) {
 
