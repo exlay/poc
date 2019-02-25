@@ -1,13 +1,20 @@
 #include <stdint.h>
 
+/* exdata: the data structure in exlay
+ * */
+struct exdata {
+	uint8_t *data;
+	uint8_t *nxt_hdr;
+};
+
 /* 
  * at first, I implement IPv4, ARP, and Ethernet */
 /* this is for protocol developer */
 struct protobj {
 	char *name;
 	uint8_t bind_size;
-	int (*d_input)(uint8_t *data, uint32_t msg_len);
-	int (*d_output)(uint8_t *data, uint32_t msg_len);
+	int (*d_input)(struct exdata *exd, uint32_t datalen);
+	int (*d_output)(struct exdata *exd, uint32_t datalen);
 	void (*c_push)(uint8_t *table, uint8_t *entry, uint32_t ent_size);
 	void (*c_pull)(uint8_t *table, uint8_t *entry, uint32_t *ent_size);
 };
@@ -15,19 +22,14 @@ struct protobj {
 /* exlay_ep: exlay endpoint is used by user program */
 /* this is for application developer */
 struct exlay_ep {
+	int sock;
+	char *ifname;
 	uint8_t *binding;
 	uint8_t bind_size;
 	uint8_t *nxt_type;	/* IP: protocol 8bit, Ethernet: type 16bit */
 	uint8_t nxt_type_size;
 };
 
-/* exlay_ep_node: a node in the tree structure of protocols in exlay */
-/* this is for exlay system developer */
-struct exlay_ep_node {
-	uint8_t *binding;
-	uint8_t bind_size;
-	uint8_t *nxt_type;
-	uint8_t nxt_type_size;
-	struct exlay_ep_node *fp;
-	struct exlay_ep_node *bp;
-};
+
+extern int exd_out(struct exdata *exd, uint32_t len);
+extern int exd_in(struct exdata *exd, uint32_t len);

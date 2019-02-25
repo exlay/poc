@@ -3,7 +3,7 @@ CFLAGS := -Wall -Wextra -ggdb -g3 -MMD -MP
 CFLAGS += -DDEBUG
 LDFLAGS =
 
-INCDIRS := ./include
+INCDIRS := ../include
 INCLUDE = $(addprefix -I,$(INCDIRS))
 
 BASES := $(filter-out include Makefile lib,$(wildcard *))
