@@ -6,6 +6,8 @@
 #include <net/ethernet.h>
 #include <arpa/inet.h>
 #include <error.h>
+#include <dlfcn.h>
+#include <string.h>
 
 #include "protocol.h"
 
@@ -87,11 +89,49 @@ int exlay_to_kern(struct exdata *exd, uint32_t len)
 
 int ex_set_binding(
 		int ep,
-		unsigned int layer, 
+		unsigned int lyr, 
 		char *proto, 
 		void *lbind,
 		void *for_lower)
 {
+	struct exlay_ep *exep;
+	exep = get_ep_from_sock(ep);
+	if (exep == NULL) {
+		/* no such exlay endpoint */
+		return -1;
+	}
+	if (exep->nr_protos > lyr || lyr == 0) {
+		/* no such layer in the endpoint */
+		return -1;
+	}
+	/* XXX ask daemon to inform the "proto" */
+	if (strcmp(proto, "test_ethernet") != 0) {
+		return -1;
+	}
+	/* load library of "proto" by protobj symbol */
+	void *handle = dlopen("/home/vagrant/work/poc/protocols/lib/libtest_ethernet.so", RTLD_NOW|RTLD_GLOBAL);
+	char *err;
+	if ((err = dlerror()) != NULL) {
+		fputs(err, stderr);
+		putchar('\n');
+		return -1;
+	}
+	/* XXX how should it specify the symbol name of protobj? */
+	exep->btm[lyr - 1].proto = (struct protobj *)dlsym(handle, "proto_ethernet");
+	if ((err = dlerror()) != NULL) {
+		fputs(err, stderr);
+		putchar('\n');
+		return -1;
+	}
+
+	/* set requested binding */
+	uint8_t size = exep->btm[lyr - 1].proto->bind_size;
+	exep->btm[lyr - 1].lbind = malloc(size);
+	memcpy(exep->btm[lyr - 1].lbind, lbind, size);
+
+	exep->btm[lyr - 1].rbind = malloc(size);
+	exep->btm[lyr - 1].for_lower = NULL;
+
 	return 0;
 }
 

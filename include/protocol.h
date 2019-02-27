@@ -26,6 +26,7 @@ struct exlay_ep {
 	char *ifname;
 	struct exlay_stack *top; /* top layer */
 	struct exlay_stack *btm; /* buttom layer */
+	struct exlay_stack *cur; /* current layer */
 	struct exlay_ep *prev;
 	struct exlay_ep *next;
 };
@@ -34,6 +35,9 @@ struct exlay_stack {
 	uint8_t layer;
 	struct exlay_ep *ep; /* exlay endpoint */
 	struct protobj *proto;
+	void *for_lower; /* upper layer's ID: */
+	void *lbind;
+	void *rbind;
 };
 
 

@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -ggdb -g3 -MMD -MP
 CFLAGS += -DDEBUG
-LDFLAGS = -lexlay
+LDFLAGS = -lexlay -ldl
 
 SRCDIRS = ./src
 OBJDIR = ./build

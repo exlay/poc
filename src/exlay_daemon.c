@@ -74,7 +74,7 @@ static void func_daem_add(void *buf, int len)
 	struct exlay_hdr *hdr = (struct exlay_hdr *)buf;
 	uint8_t *data = (uint8_t *)buf + EXLAYHDRSIZE;
 	char prot_name[MAXPROTNAMELEN] = {0};
-	char prot_path[MAXPROTPATHLEN] = {0};
+	char *prot_path = (char *)malloc(sizeof(char) * hdr->len_proto_path);
 	memcpy(prot_name, data, hdr->len_proto_name);
 	memcpy(prot_path, data + hdr->len_proto_name, hdr->len_proto_path);
 	int ret;
@@ -112,6 +112,7 @@ static void func_daem_add(void *buf, int len)
 		/* XXX error message should be written */
 		goto OUT;
 	}
+	new_prt->path = (char *)malloc(sizeof(char) * hdr->len_proto_path);
 	memcpy(new_prt->name, prot_name, hdr->len_proto_name);
 	memcpy(new_prt->path, prot_path, hdr->len_proto_path);
 	prot_ctr++;
