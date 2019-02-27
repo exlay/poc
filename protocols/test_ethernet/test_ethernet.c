@@ -30,6 +30,7 @@ static void test_ethernet_pull(
 
 struct protobj proto_ethernet = {
 	.name = "test_ethernet",
+	.upper_type_size = 2, /* ethernet frame type field */
 	.bind_size = 6,
 	.d_input = test_ethernet_in,
 	.d_output = test_ethernet_out,

@@ -126,11 +126,15 @@ int ex_set_binding(
 
 	/* set requested binding */
 	uint8_t size = exep->btm[lyr - 1].proto->bind_size;
+	uint8_t uplyr_type_s = exep->btm[lyr - 1].proto->upper_type_size;
 	exep->btm[lyr - 1].lbind = malloc(size);
 	memcpy(exep->btm[lyr - 1].lbind, lbind, size);
 
 	exep->btm[lyr - 1].rbind = malloc(size);
-	exep->btm[lyr - 1].for_lower = NULL;
+	exep->btm[lyr - 1].upper = malloc(uplyr_type_s);
+	if (for_lower != NULL) {
+		memcpy(exep->btm[lyr - 1].upper, for_lower, uplyr_type_s);
+	}
 
 	return 0;
 }

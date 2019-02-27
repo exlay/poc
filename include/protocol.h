@@ -36,7 +36,7 @@ struct exlay_stack {
 	uint8_t layer;
 	struct exlay_ep *ep; /* exlay endpoint */
 	struct protobj *proto;
-	void *for_lower; /* upper layer's ID: */
+	void *upper; /* upper layer's ID: */
 	void *lbind;
 	void *rbind;
 };
