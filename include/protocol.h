@@ -13,6 +13,7 @@ struct exdata {
 struct protobj {
 	char *name;
 	uint8_t bind_size;
+	uint8_t upper_type_size;
 	int (*d_input)(struct exdata *exd, uint32_t datalen);
 	int (*d_output)(struct exdata *exd, uint32_t datalen);
 	void (*c_push)(uint8_t *table, uint8_t *entry, uint32_t ent_size);
