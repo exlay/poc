@@ -9,6 +9,39 @@
 
 #include "protocol.h"
 
+struct exlay_ep ep_head = {
+	.next = &ep_head,
+	.prev = &ep_head,
+};
+
+static void add_to_list(struct exlay_ep *p)
+{
+	p->prev = &ep_head;
+	p->next = ep_head.next;
+	ep_head.next->prev = p;
+	ep_head.next = p;
+}
+
+static void del_from_list(struct exlay_ep *p)
+{
+	p->prev->next = p->next;
+	p->next->prev = p->prev;
+	p->prev = p->next = NULL;
+}
+
+static struct exlay_ep *get_ep_from_sock(int sock)
+{
+	struct exlay_ep *p;
+	for (p = ep_head.next; p != &ep_head; p++) {
+		if (sock == p->sock) {
+			/* found */
+			return p;
+		}
+	}
+	/* if not found */
+	return NULL;
+}
+
 int exd_out(struct exdata *exd, uint32_t len)
 {
 	return len;
@@ -19,14 +52,31 @@ int exd_in(struct exdata *exd, uint32_t len)
 	return len;
 }
 
+static void init_stack(struct exlay_ep *ep, int nr_protos)
+{
+	int i;
+	ep->nr_protos = nr_protos;
+	for (i = 0; i < nr_protos; i++) {
+		ep->btm[i].layer = i + 1;
+		ep->btm[i].ep = ep;
+		ep->btm[i].proto = NULL;
+	}
+}
+
 int ex_create_stack(unsigned int nr_protos)
 {
 	struct exlay_ep *exep;
 	exep = (struct exlay_ep *)malloc(sizeof(struct exlay_ep));
 	exep->sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+	exep->nr_protos = nr_protos;
+	exep->btm = (struct exlay_stack *)malloc(sizeof(struct exlay_stack) * nr_protos);
+	exep->top = &exep->btm[nr_protos - 1];
+	init_stack(exep, nr_protos);
+
 	if (exep->sock < 0) {
 		perror("ex_create_stack: socket:");
 	}
+	add_to_list(exep);
 	return exep->sock;
 }
 
@@ -72,5 +122,13 @@ int ex_recv_stack(int ep, uint32_t size)
 
 int ex_close_stack(int ep)
 {
+	struct exlay_ep *p;
+	p = get_ep_from_sock(ep);
+	if (p == NULL) {
+		/* no such exlay endpoint */
+		return -1;
+	}
+	del_from_list(p);
+	free(p);
 	return 0;
 }

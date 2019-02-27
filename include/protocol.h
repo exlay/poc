@@ -19,15 +19,21 @@ struct protobj {
 	void (*c_pull)(uint8_t *table, uint8_t *entry, uint32_t *ent_size);
 };
 
-/* exlay_ep: exlay endpoint is used by user program */
-/* this is for application developer */
+/* exlay_ep: exlay endpoint is used in exlay system, not in app. */
 struct exlay_ep {
 	int sock;
+	uint8_t nr_protos;
 	char *ifname;
-	uint8_t *binding;
-	uint8_t bind_size;
-	uint8_t *nxt_type;	/* IP: protocol 8bit, Ethernet: type 16bit */
-	uint8_t nxt_type_size;
+	struct exlay_stack *top; /* top layer */
+	struct exlay_stack *btm; /* buttom layer */
+	struct exlay_ep *prev;
+	struct exlay_ep *next;
+};
+
+struct exlay_stack {
+	uint8_t layer;
+	struct exlay_ep *ep; /* exlay endpoint */
+	struct protobj *proto;
 };
 
 

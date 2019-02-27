@@ -52,8 +52,8 @@ tag: tags cscope.out
 	cscope -Rb
 
 clean:
-	$(RM) $(OBJS) $(DEPS) $(BINS)
-	-$(RMDIR) $(OBJDIR) $(BINDIR)
+	$(RM) $(OBJS) $(DEPS) $(BINS) $(LIB)
+	-$(RMDIR) $(OBJDIR) $(BINDIR) $(LIBDIR)
 	make -C ./protocols clean
 	make -C ./sample clean
 

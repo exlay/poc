@@ -6,7 +6,7 @@ LDFLAGS =
 INCDIRS := ../include
 INCLUDE = $(addprefix -I,$(INCDIRS))
 
-BASES := $(filter-out include Makefile lib,$(wildcard *))
+BASES := $(filter-out include Makefile lib protolib.map,$(wildcard *))
 
 LINKDIR := $(CURDIR)/lib
 
