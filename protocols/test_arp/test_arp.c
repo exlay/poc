@@ -5,11 +5,11 @@
 #include "test_arp.h"
 #include "protocol.h"
 
-static int test_arp_in(uint8_t *data, uint32_t msg_len) {
+static int test_arp_in(struct exdata *data, uint32_t msg_len) {
 
 }
 
-static int test_arp_out(uint8_t *data, uint32_t msg_len) {
+static int test_arp_out(struct exdata *data, uint32_t msg_len) {
 
 }
 
@@ -28,6 +28,7 @@ static void test_arp_pull(
 
 struct protobj proto_arp = {
 	.name = "test_arp",
+	.upper_type_size = 0,
 	.bind_size = 0,
 	.d_input = test_arp_in,
 	.d_output = test_arp_out,

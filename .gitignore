@@ -6,6 +6,7 @@ a.out
 
 tags
 *.out
+core
 
 exlay_daemon
 exlay
