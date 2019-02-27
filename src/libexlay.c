@@ -130,7 +130,10 @@ int ex_set_binding(
 	exep->btm[lyr - 1].lbind = malloc(size);
 	memcpy(exep->btm[lyr - 1].lbind, lbind, size);
 
-	exep->btm[lyr - 1].rbind = malloc(size);
+	void *rbind = &exep->btm[lyr - 1].rbind;
+	if (rbind == NULL) {
+		rbind = malloc(size);
+	}
 	exep->btm[lyr - 1].upper = malloc(uplyr_type_s);
 	if (for_lower != NULL) {
 		memcpy(exep->btm[lyr - 1].upper, for_lower, uplyr_type_s);
@@ -146,6 +149,20 @@ int ex_bind_stack(int ep)
 
 int ex_set_remote(int ep, int layer, void *binding)
 {
+	struct exlay_ep *exep;
+	exep = get_ep_from_sock(ep);
+	if (exep == NULL) {
+		/* no such endpoint */
+	}
+	void *rbind = &exep->btm[layer - 1].rbind;
+	uint8_t size = exep->btm[layer - 1].proto->bind_size;
+	if (rbind == NULL) {
+		rbind = malloc(size);
+	}
+	if (binding != NULL) {
+		memcpy(rbind, binding, size);
+	}
+
 	return 0;
 }
 
