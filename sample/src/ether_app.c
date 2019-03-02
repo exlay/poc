@@ -17,7 +17,13 @@ int main(void)
 	assert(ep > 0);
 	ret = ex_set_binding(ep, 1, "test_ethernet", mac, NULL);
 	assert(ret == 0);
+	ret = ex_set_remote(ep, 1, NULL);
+	assert(ret == 0);
 	ret = ex_set_remote(ep, 1, dstmac);
+	assert(ret == 0);
+	ret = ex_set_remote(ep, 1, dstmac);
+	assert(ret == 0);
+	ret = ex_set_remote(ep, 1, NULL);
 	assert(ret == 0);
 	ret = ex_bind_stack(ep);
 	assert(ret == 0);
