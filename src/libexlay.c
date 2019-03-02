@@ -95,6 +95,12 @@ int ex_set_binding(
 		void *for_lower)
 {
 	struct exlay_ep *exep;
+	char buf[strlen(proto)+6]; /* store name of "libXX.so" */
+	memset(buf, 0, sizeof(buf));
+	strncat(buf, "lib", 3);
+	strncat(buf, proto, strlen(proto));
+	strncat(buf, ".so", 3);
+
 	exep = get_ep_from_sock(ep);
 	if (exep == NULL) {
 		/* no such exlay endpoint */
@@ -104,12 +110,8 @@ int ex_set_binding(
 		/* no such layer in the endpoint */
 		return -1;
 	}
-	/* XXX ask daemon to inform the "proto" */
-	if (strcmp(proto, "test_ethernet") != 0) {
-		return -1;
-	}
 	/* load library of "proto" by protobj symbol */
-	void *handle = dlopen("/home/vagrant/work/poc/protocols/lib/libtest_ethernet.so", RTLD_NOW|RTLD_GLOBAL);
+	void *handle = dlopen(buf, RTLD_NOW|RTLD_GLOBAL);
 	char *err;
 	if ((err = dlerror()) != NULL) {
 		fputs(err, stderr);
@@ -117,7 +119,7 @@ int ex_set_binding(
 		return -1;
 	}
 	/* XXX how should it specify the symbol name of protobj? */
-	exep->btm[lyr - 1].proto = (struct protobj *)dlsym(handle, "proto_ethernet");
+	exep->btm[lyr - 1].proto = (struct protobj *)dlsym(handle, proto);
 	if ((err = dlerror()) != NULL) {
 		fputs(err, stderr);
 		putchar('\n');

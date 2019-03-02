@@ -28,7 +28,7 @@ static void test_ethernet_pull(
 		uint32_t *ent_size) {
 }
 
-struct protobj proto_ethernet = {
+struct protobj test_ethernet = {
 	.name = "test_ethernet",
 	.upper_type_size = 2, /* ethernet frame type field */
 	.bind_size = 6,

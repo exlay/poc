@@ -20,6 +20,7 @@ BINS = $(addprefix $(BINDIR)/,$(TARGETS))
 INCLUDE = $(addprefix -I,$(INCDIRS))
 
 LIB = $(LIBDIR)/libexlay.so
+PLIBDIR = $(CURDIR)/protocols/lib
 
 SRCFS = $(notdir $(SRCS))
 OBJFS = $(SRCFS:%.c=%.o)
@@ -44,7 +45,7 @@ $(OBJDIR)/%.o: $(SRCDIRS)/%.c
 
 $(LIBDIR)/%.so: $(OBJDIR)/%.o
 	if [ ! -d $(LIBDIR) ]; then mkdir $(LIBDIR); fi
-	$(CC) -shared -Wl,-soname,$(LIBDIR)/$(notdir $@) -o $@ $^
+	$(CC) -shared -Wl,-soname,$(LIBDIR)/$(notdir $@),-rpath,$(PLIBDIR) -o $@ $^
 
 
 tag: tags cscope.out
