@@ -1,7 +1,8 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -ggdb -g3 -MMD -MP -fPIC
 CFLAGS += -DDEBUG
-LDFLAGS =
+LDFLAGS = -lexlay -ldl
+LIBRARY = -L./lib
 
 TARGETS = exlay_daemon exlay 
 SRCDIRS = ./src
@@ -30,14 +31,14 @@ DEPFS = $(SRCFS:%.c=%.d)
 .PRECIOUS: $(OBJS) $(DEPS)
 
 all: 
-	+make $(BINS) 
 	+make $(LIB)
+	+make $(BINS) 
 	+make -C ./protocols
 	+make -C ./sample
 
 $(BINDIR)/%: $(OBJDIR)/%.o
 	if [ ! -d "$(BINDIR)" ]; then mkdir $(BINDIR); fi
-	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+	$(CC) $(CFLAGS) $(LIBRARY) -o $@ $^ $(LDFLAGS)
 
 $(OBJDIR)/%.o: $(SRCDIRS)/%.c
 	if [ ! -d "$(OBJDIR)" ]; then mkdir $(OBJDIR); fi

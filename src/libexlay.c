@@ -24,6 +24,14 @@ struct exlay_ep ep_head = {
 	.prev = &ep_head,
 };
 
+void reflect_to_binding_tree(struct exlay_ep *p)
+{
+	/* search tree */
+	int i;
+	for (i = 0; i < p->nr_protos; i++) {
+	}
+}
+
 static void add_to_list(struct exlay_ep *p)
 {
 	p->prev = &ep_head;
@@ -68,7 +76,6 @@ static void init_stack(struct exlay_ep *ep, int nr_protos)
 	ep->nr_protos = nr_protos;
 	for (i = 0; i < nr_protos; i++) {
 		ep->btm[i].layer = i + 1;
-		ep->btm[i].ep = ep;
 		ep->btm[i].proto = NULL;
 		ep->btm[i].lbind = NULL;
 		ep->btm[i].rbind = NULL;
@@ -82,7 +89,7 @@ int ex_create_stack(unsigned int nr_protos)
 	exep = (struct exlay_ep *)malloc(sizeof(struct exlay_ep));
 	exep->sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
 	exep->nr_protos = nr_protos;
-	exep->btm = (struct exlay_stack *)malloc(sizeof(struct exlay_stack) * nr_protos);
+	exep->btm = (struct exlay_layer *)malloc(sizeof(struct exlay_layer) * nr_protos);
 	exep->top = &exep->btm[nr_protos - 1];
 	init_stack(exep, nr_protos);
 
@@ -163,10 +170,10 @@ int ex_bind_stack(int ep)
 		/* no such endpoint */
 		return -1;
 	}
+	/* reflect stack to binding_tree */
+	reflect_to_binding_tree(exep);
+	
 
-	/* how large is the size of hash space enough to store the network
-	 * endpoints on this node? */
-	store_binding_hash(ep);
 	return 0;
 }
 

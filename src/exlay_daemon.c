@@ -7,8 +7,10 @@
 #include <string.h>
 #include <netinet/in.h>
 #include <sys/mman.h>
+#include <dlfcn.h>
 
 #include "exlay.h"
+#include "protocol.h"
 
 static struct sockaddr_in daem_addr_in;
 static int daem_sock;
@@ -17,6 +19,14 @@ static int prot_ctr = 0;
 static struct sockaddr_in cli_addr_in;
 
 struct proto_info list_head;
+struct binding_tree root;
+
+static int init_exlay(void)
+{
+	root.upper = &root;
+	root.lower = NULL;
+	root.fp = &root;
+}
 
 void add_to_list(struct proto_info *p)
 {
@@ -56,7 +66,6 @@ static void func_daem_list(void *buf, int len)
 		*p = '\n';
 		p++;
 	}
-
 
 OUT:
 	ret = sendto(daem_sock, buf, EXLAYHDRSIZE + strlen((char *)data), 0, 
@@ -116,6 +125,17 @@ static void func_daem_add(void *buf, int len)
 	memcpy(new_prt->name, prot_name, hdr->len_proto_name);
 	memcpy(new_prt->path, prot_path, hdr->len_proto_path);
 	prot_ctr++;
+
+	void *handle = dlopen(new_prt->path, RTLD_LAZY|RTLD_GLOBAL);
+	char *err;
+	if ((err = dlerror()) != NULL) {
+		fputs(err, stderr);
+		putchar('\n');
+		hdr->code = CODE_NG;
+		goto OUT;
+	}
+	
+
 	add_to_list(new_prt);
 	debug_printf("prot %s (%s) was successfully added\n", 
 			new_prt->name, new_prt->path);

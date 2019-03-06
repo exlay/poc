@@ -121,18 +121,6 @@ void print_exlay_hdr(struct exlay_hdr *hdr)
 #endif
 
 
-
-/* exlay_ep_node: a node in the tree structure of protocols in exlay */
-/* this is for exlay system developer */
-struct exlay_ep_node {
-	uint8_t *binding;
-	uint8_t bind_size;
-	uint8_t *nxt_type;
-	uint8_t nxt_type_size;
-	struct exlay_ep_node *fp;
-	struct exlay_ep_node *bp;
-};
-
 int ex_create_stack(int nr_layer);
 
 int ex_set_binding(

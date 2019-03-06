@@ -9,7 +9,7 @@ struct exdata {
 
 /* 
  * at first, I implement IPv4, ARP, and Ethernet */
-/* this is for protocol developer */
+/* this is defined by each protocol developer */
 struct protobj {
 	char *name;
 	uint8_t bind_size;
@@ -25,22 +25,27 @@ struct exlay_ep {
 	int sock;
 	uint8_t nr_protos;
 	char *ifname;
-	struct exlay_stack *top; /* top layer */
-	struct exlay_stack *btm; /* buttom layer */
-	struct exlay_stack *cur; /* current layer */
-	struct exlay_ep *prev;
-	struct exlay_ep *next;
+	struct exlay_layer *top; /* top layer */
+	struct exlay_layer *btm; /* buttom layer */
+	struct exlay_layer *cur; /* current layer */
+	struct exlay_ep *prev; /* used by exlay system for an endpoint search */
+	struct exlay_ep *next; /* used by exlay system for an ednpoing search */
 };
 
-struct exlay_stack {
+struct exlay_layer {
 	uint8_t layer;
-	struct exlay_ep *ep; /* exlay endpoint */
 	struct protobj *proto;
 	void *upper; /* upper layer's ID: */
 	void *lbind;
 	void *rbind;
 };
 
+struct binding_tree {
+	struct exlay_layer *entry;
+	struct binding_tree *upper;
+	struct binding_tree *lower;
+	struct binding_tree *fp;
+};
 
 extern int exd_out(struct exdata *exd, uint32_t len);
 extern int exd_in(struct exdata *exd, uint32_t len);

@@ -187,8 +187,8 @@ static void func_exlay_add(int largc, char **largv)
 	struct exlay_hdr hdr = {
 		.cmd = CMD_ADD,
 		.code = CODE_REQ,
-		.len_proto_name = strlen(largv[2]),
-		.len_proto_path = strlen(largv[3]),
+		.len_proto_name = strlen(largv[2]) + 1,
+		.len_proto_path = strlen(largv[3]) + 1,
 	};
 
 	int ret;
