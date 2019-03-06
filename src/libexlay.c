@@ -1,3 +1,9 @@
+/* libexlay.c: library for user Apps. using exlay
+ *
+ * TODO: 
+ * 		add configure API for each protocol (setsockopt-like)	
+ * 		support multi-thread for send/recv
+ * */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -134,16 +140,16 @@ int ex_set_binding(
 	}
 
 	/* set requested binding */
-	uint8_t size = exep->btm[lyr - 1].proto->bind_size;
-	uint8_t uplyr_type_s = exep->btm[lyr - 1].proto->upper_type_size;
-	exep->btm[lyr - 1].lbind = malloc(size);
-	memcpy(exep->btm[lyr - 1].lbind, lbind, size);
+	uint8_t size = exep->btm[lyr-1].proto->bind_size;
+	uint8_t uplyr_type_s = exep->btm[lyr-1].proto->upper_type_size;
+	exep->btm[lyr-1].lbind = malloc(size);
+	memcpy(exep->btm[lyr-1].lbind, lbind, size);
 
 	if (for_lower != NULL) {
-		exep->btm[lyr - 1].upper = malloc(uplyr_type_s);
-		memcpy(exep->btm[lyr - 1].upper, for_lower, uplyr_type_s);
+		exep->btm[lyr-1].upper = malloc(uplyr_type_s);
+		memcpy(exep->btm[lyr-1].upper, for_lower, uplyr_type_s);
 	} else {
-		exep->btm[lyr - 1].upper = NULL;
+		exep->btm[lyr-1].upper = NULL;
 	}
 
 	return 0;
@@ -151,6 +157,16 @@ int ex_set_binding(
 
 int ex_bind_stack(int ep)
 {
+	struct exlay_ep *exep;
+	exep = get_ep_from_sock(ep);
+	if (exep == NULL) {
+		/* no such endpoint */
+		return -1;
+	}
+
+	/* how large is the size of hash space enough to store the network
+	 * endpoints on this node? */
+	store_binding_hash(ep);
 	return 0;
 }
 
