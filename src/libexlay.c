@@ -1,11 +1,19 @@
+/* libexlay.c: library for user Apps. using exlay
+ *
+ * TODO: 
+ * 		add configure API for each protocol (setsockopt-like)	
+ * 		support multi-thread for send/recv
+ * */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <linux/if_packet.h>
 #include <net/ethernet.h>
 #include <arpa/inet.h>
 #include <error.h>
+#include <errno.h>
 #include <dlfcn.h>
 #include <string.h>
 
@@ -62,6 +70,9 @@ static void init_stack(struct exlay_ep *ep, int nr_protos)
 		ep->btm[i].layer = i + 1;
 		ep->btm[i].ep = ep;
 		ep->btm[i].proto = NULL;
+		ep->btm[i].lbind = NULL;
+		ep->btm[i].rbind = NULL;
+		ep->btm[i].upper = NULL;
 	}
 }
 
@@ -95,6 +106,12 @@ int ex_set_binding(
 		void *for_lower)
 {
 	struct exlay_ep *exep;
+	char buf[strlen(proto)+6]; /* store name of "libXX.so" */
+	memset(buf, 0, sizeof(buf));
+	strncat(buf, "lib", 3);
+	strncat(buf, proto, strlen(proto));
+	strncat(buf, ".so", 3);
+
 	exep = get_ep_from_sock(ep);
 	if (exep == NULL) {
 		/* no such exlay endpoint */
@@ -104,12 +121,10 @@ int ex_set_binding(
 		/* no such layer in the endpoint */
 		return -1;
 	}
-	/* XXX ask daemon to inform the "proto" */
-	if (strcmp(proto, "test_ethernet") != 0) {
-		return -1;
-	}
+	/* XXX if ex_set_binding is already called before, notify */
+
 	/* load library of "proto" by protobj symbol */
-	void *handle = dlopen("/home/vagrant/work/poc/protocols/lib/libtest_ethernet.so", RTLD_NOW|RTLD_GLOBAL);
+	void *handle = dlopen(buf, RTLD_NOW|RTLD_GLOBAL);
 	char *err;
 	if ((err = dlerror()) != NULL) {
 		fputs(err, stderr);
@@ -117,7 +132,7 @@ int ex_set_binding(
 		return -1;
 	}
 	/* XXX how should it specify the symbol name of protobj? */
-	exep->btm[lyr - 1].proto = (struct protobj *)dlsym(handle, "proto_ethernet");
+	exep->btm[lyr-1].proto = (struct protobj *)dlsym(handle, proto);
 	if ((err = dlerror()) != NULL) {
 		fputs(err, stderr);
 		putchar('\n');
@@ -125,18 +140,16 @@ int ex_set_binding(
 	}
 
 	/* set requested binding */
-	uint8_t size = exep->btm[lyr - 1].proto->bind_size;
-	uint8_t uplyr_type_s = exep->btm[lyr - 1].proto->upper_type_size;
-	exep->btm[lyr - 1].lbind = malloc(size);
-	memcpy(exep->btm[lyr - 1].lbind, lbind, size);
+	uint8_t size = exep->btm[lyr-1].proto->bind_size;
+	uint8_t uplyr_type_s = exep->btm[lyr-1].proto->upper_type_size;
+	exep->btm[lyr-1].lbind = malloc(size);
+	memcpy(exep->btm[lyr-1].lbind, lbind, size);
 
-	void *rbind = &exep->btm[lyr - 1].rbind;
-	if (rbind == NULL) {
-		rbind = malloc(size);
-	}
-	exep->btm[lyr - 1].upper = malloc(uplyr_type_s);
 	if (for_lower != NULL) {
-		memcpy(exep->btm[lyr - 1].upper, for_lower, uplyr_type_s);
+		exep->btm[lyr-1].upper = malloc(uplyr_type_s);
+		memcpy(exep->btm[lyr-1].upper, for_lower, uplyr_type_s);
+	} else {
+		exep->btm[lyr-1].upper = NULL;
 	}
 
 	return 0;
@@ -144,25 +157,40 @@ int ex_set_binding(
 
 int ex_bind_stack(int ep)
 {
+	struct exlay_ep *exep;
+	exep = get_ep_from_sock(ep);
+	if (exep == NULL) {
+		/* no such endpoint */
+		return -1;
+	}
+
+	/* how large is the size of hash space enough to store the network
+	 * endpoints on this node? */
+	store_binding_hash(ep);
 	return 0;
 }
 
-int ex_set_remote(int ep, int layer, void *binding)
+int ex_set_remote(int ep, int lyr, void *binding)
 {
 	struct exlay_ep *exep;
 	exep = get_ep_from_sock(ep);
 	if (exep == NULL) {
 		/* no such endpoint */
+		return -1;
 	}
-	void *rbind = &exep->btm[layer - 1].rbind;
-	uint8_t size = exep->btm[layer - 1].proto->bind_size;
-	if (rbind == NULL) {
-		rbind = malloc(size);
+	uint8_t size = exep->btm[lyr-1].proto->bind_size;
+	if (binding == NULL) {
+		free(exep->btm[lyr-1].rbind);
+	} else {
+		if (exep->btm[lyr-1].rbind == NULL) {
+		/* ex_set_remote is called for the first time */
+			if ((exep->btm[lyr-1].rbind = malloc(size)) == NULL) {
+				fprintf(stderr, "ex_set_remote: malloc: error: %d\n", errno);
+				exit(errno);
+			}
+		}
+		memcpy(exep->btm[lyr-1].rbind, binding, size);
 	}
-	if (binding != NULL) {
-		memcpy(rbind, binding, size);
-	}
-
 	return 0;
 }
 
