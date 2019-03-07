@@ -1,9 +1,12 @@
 #include <stdio.h>
 #include <assert.h>
+#include <string.h>
+
 #include "exlay.h"
 #include "protocol.h"
 
 #define MACSTR "86:fd:5e:fb:fa:ce"
+#define STRING "hello, world\n"
 
 int main(void)
 {
@@ -29,9 +32,9 @@ int main(void)
 	assert(ret == 0);
 	ret = ex_dial_stack(ep);
 	assert(ret == 0);
-	ret = ex_send_stack(ep, size);
+	ret = ex_send_stack(ep, STRING, strlen(STRING));
 	assert(ret >= 0);
-	ret = ex_recv_stack(ep, size);
+	ret = ex_recv_stack(ep, STRING, strlen(STRING));
 	assert(ret >= 0);
 	ret = ex_close_stack(ep);
 	assert(ret == 0);

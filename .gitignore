@@ -12,6 +12,11 @@ exlay_daemon
 exlay
 test
 
+exlay_rpc_clnt.c
+exlay_rpc_svc.c
+exlay_rpc_xdr.c
+exlay_rpc.h
+
 build/
 bin/
 *.so

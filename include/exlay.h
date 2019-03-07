@@ -25,6 +25,7 @@
 	   	(MAXPROTNAMELEN * MAXNRPROT) : (MAXPROTNAMELEN + MAXBUFLEN) )
 
 
+#define RPCSERVER "127.0.0.1"
 
 struct proto_info {
 	struct proto_info *next;
@@ -121,24 +122,26 @@ void print_exlay_hdr(struct exlay_hdr *hdr)
 #endif
 
 
-int ex_create_stack(int nr_layer);
+int ex_create_stack(unsigned int nr_layer);
 
 int ex_set_binding(
 		int ep, 
 		unsigned int layer, 
 		char *proto, 
-		void *lbind,
-		void *for_lower);
+		char *lbind,
+		char *for_lower);
 
 int ex_bind_stack(int ep);
 
-int ex_set_remote(int ep, int layer, void *binding);
+int ex_set_remote(int ep, int layer, char *binding);
 
 int ex_dial_stack(int ep);
 
-int ex_send_stack(int ep, uint32_t size);
+int ex_listen_stack(int ep);
 
-int ex_recv_stack(int ep, uint32_t size);
+int ex_send_stack(int ep, char *buf, uint32_t size);
+
+int ex_recv_stack(int ep, char *buf, uint32_t size);
 
 int ex_close_stack(int ep);
 
