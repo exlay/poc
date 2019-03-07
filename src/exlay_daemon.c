@@ -9,8 +9,11 @@
 #include <sys/mman.h>
 #include <dlfcn.h>
 
+#include <rpc/rpc.h>
+
 #include "exlay.h"
 #include "protocol.h"
+#include "daemon.h"
 
 static struct sockaddr_in daem_addr_in;
 static int daem_sock;
