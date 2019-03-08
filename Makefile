@@ -13,10 +13,19 @@ INCDIR = ./include
 LIBDIR = $(CURDIR)/lib
 
 XDRSRC = exlay_rpc.x
-XDRSVC = $(SRCDIR)/$(XDRSRC:%.x=%_svc.c)
-XDRCLNT = $(SRCDIR)/$(XDRSRC:%.x=%_clnt.c)
-XDRXDR = $(SRCDIR)/$(XDRSRC:%.x=%_xdr.c)
-XDRHDR = $(INCDIR)/$(XDRSRC:%.x=%.h)
+XDRSVC = $(XDRSRC:%.x=%_svc.c)
+XDRCLNT = $(XDRSRC:%.x=%_clnt.c)
+XDRXDR = $(XDRSRC:%.x=%_xdr.c)
+XDRHDR = $(XDRSRC:%.x=%.h)
+
+XDROUTS = $(INCDIR)/$(XDRHDR) \
+		  $(SRCDIR)/$(XDRSVC) \
+		  $(SRCDIR)/$(XDRCLNT) \
+		  $(SRCDIR)/$(XDRXDR) \
+		  $(OBJDIR)/$(XDRSVC:%.c=%.o) \
+		  $(OBJDIR)/$(XDRCLNT:%.c=%.o) \
+		  $(OBJDIR)/$(XDRXDR:%.c=%.o) 
+
 
 RM = rm -rf
 RMDIR = rmdir
@@ -38,7 +47,7 @@ DEPFS = $(SRCFS:%.c=%.d)
 .PRECIOUS: $(OBJS) $(DEPS)
 
 all: 
-	+make $(XDRHDR) $(XDRSVC) $(XDRCLNT) $(XDRXDR)
+	+make $(XDROUTS)
 	+make $(LIB)
 	+make $(BINS) 
 	+make -C ./protocols
@@ -52,7 +61,7 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.c
 	if [ ! -d "$(OBJDIR)" ]; then mkdir $(OBJDIR); fi
 	$(CC) $(CFLAGS) -o $@ -c $< $(INCLUDE)
 
-$(LIBDIR)/%.so: $(OBJDIR)/%.o $(XDRCLNT:%.c=%.o) $(XDRXDR:%.c=%.o)
+$(LIBDIR)/%.so: $(OBJDIR)/%.o $(OBJDIR)/$(XDRCLNT:%.c=%.o) $(OBJDIR)/$(XDRXDR:%.c=%.o)
 	if [ ! -d $(LIBDIR) ]; then mkdir $(LIBDIR); fi
 	$(CC) -shared -Wl,-soname,$(LIBDIR)/$(notdir $@),-rpath,$(PLIBDIR) -o $@ $^
 
@@ -74,7 +83,7 @@ tag: tags cscope.out
 
 
 clean:
-	$(RM) $(OBJS) $(DEPS) $(BINS) $(LIB) $(XDRSVC) $(XDRCLNT) $(XDRXDR) $(XDRHDR)
+	$(RM) $(OBJS) $(DEPS) $(BINS) $(LIB) $(XDROUTS)
 	-$(RMDIR) $(OBJDIR) $(BINDIR) $(LIBDIR)
 	make -C ./protocols clean
 	make -C ./sample clean
