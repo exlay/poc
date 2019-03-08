@@ -7,5 +7,10 @@ program EXLAYPROG {
 		int EX_DIAL_STACK(int) = 5;
 		int EX_LISTEN_STACK(int) = 6;
 		int EX_CLOSE_STACK(int) = 7;
+		int EXLAY_LIST(void) = 8;
+		int EXLAY_ADD(string) = 9;
+		int EXLAY_DEL(string) = 10;
+		int EXLAY_INFO(string, string) = 11;
+		int EXLAY_UPDATE(string, string) = 12;
 	} = 1;
 } = 0x20001001;

@@ -26,6 +26,11 @@ XDROUTS = $(INCDIR)/$(XDRHDR) \
 		  $(OBJDIR)/$(XDRCLNT:%.c=%.o) \
 		  $(OBJDIR)/$(XDRXDR:%.c=%.o) 
 
+EXLAYCLI = $(BINDIR)/exlay
+CLIOBJS = $(addprefix $(OBJDIR)/,$(XDRXDR:%.c=%.o) $(XDRCLNT:%.c=%.o) exlay.o)
+
+EXLAYDAEMON = $(BINDIR)/exlay_daemon
+DAEMONOBJS = $(addprefix $(OBJDIR)/,$(XDRXDR:%.c=%.o) $(XDRSVC:%.c=%.o) exlay_daemon.o)
 
 RM = rm -rf
 RMDIR = rmdir
@@ -58,7 +63,11 @@ protocols:
 sample:
 	+make -C ./sample
 
-$(BINDIR)/%: $(OBJDIR)/%.o
+$(EXLAYCLI): $(CLIOBJS)
+	if [ ! -d "$(BINDIR)" ]; then mkdir $(BINDIR); fi
+	$(CC) $(CFLAGS) $(LIBRARY) -o $@ $^ $(LDFLAGS)
+
+$(EXLAYDAEMON): $(DAEMONOBJS)
 	if [ ! -d "$(BINDIR)" ]; then mkdir $(BINDIR); fi
 	$(CC) $(CFLAGS) $(LIBRARY) -o $@ $^ $(LDFLAGS)
 
