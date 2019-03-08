@@ -7,13 +7,16 @@
 #include <string.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <rpc/rpc.h>
 
 #include "exlay.h"
+#include "exlay_rpc.h"
 
 static struct sockaddr_in daem_addr_in;
 static int cli_sock;
+CLIENT *client;
 
-static void print_code(uint8_t code)
+static void check_result(int code)
 {
 	switch (code) {
 		case CODE_INVREQ:
@@ -30,6 +33,9 @@ static void print_code(uint8_t code)
 			break;
 		case CODE_NEXIST:
 			fprintf(stderr, "error: No sucn protocol in the list\n");
+			break;
+		case CODE_NFND:
+			fprintf(stderr, "error: No sucn file or directory\n");
 			break;
 		case CODE_NG:
 			fprintf(stderr, "error: Something wrong with exlay daemon\n");
@@ -145,72 +151,39 @@ HELP:
 
 static void func_exlay_list(int largc, char **largv)
 {
+	char **res;
 	if (largc != 2) {
 		func_exlay_help(largc, largv);
 		goto OUT;
 	}
-	struct exlay_hdr hdr = {
-		.cmd = CMD_LIST,
-		.code = CODE_REQ,
-		.len_proto_name = 0,
-		.len_proto_path = 0,
-	};
+	res = exlay_list_1(client);
 
-	int ret;
-	uint8_t data[MAXPKTSIZE] = {0};
-	int data_len = 0;
-
-	ret = send_and_recv_pkt(&hdr, data, &data_len);
-
-	if (hdr.cmd != CMD_LIST) {
-		fprintf(stderr, "invalid response: %d\n", hdr.cmd);
-		goto OUT;
+	if (res == NULL) {
+		clnt_perror(client, RPCSERVER);
+		exit(EXIT_FAILURE);
 	}
 
-	switch (hdr.code) {
-		case CODE_OK:
-			print_data(&hdr, data);
-			break;
-		default:
-			print_code(hdr.code);
-	}
+	printf("========== Protocol List ==========\n%s", *res);
+	printf("===================================\n");
+
 OUT:
 	return;
 }
 
 static void func_exlay_add(int largc, char **largv)
 {
+	int *res;
 	if (largc != 4) {
 		func_exlay_help(largc, largv);
 		goto OUT;
 	}
-	struct exlay_hdr hdr = {
-		.cmd = CMD_ADD,
-		.code = CODE_REQ,
-		.len_proto_name = strlen(largv[2]) + 1,
-		.len_proto_path = strlen(largv[3]) + 1,
-	};
-
-	int ret;
-	uint8_t data[MAXPKTSIZE] = {0};
-	int data_len = hdr.len_proto_name + hdr.len_proto_path;
-	
-	memcpy(data, largv[2], hdr.len_proto_name);
-	memcpy(data + hdr.len_proto_name, largv[3], hdr.len_proto_path);
-
-	ret = send_and_recv_pkt(&hdr, data, &data_len);
-
-	if (hdr.cmd != CMD_ADD) {
-		fprintf(stderr, "operation not supported\n");
-		goto OUT;
+	res = exlay_add_1(largv[2], largv[3], client);
+	if (res == NULL) {
+		clnt_perror(client, RPCSERVER);
+		exit(EXIT_FAILURE);
 	}
 
-	switch (hdr.code) {
-		case CODE_OK:
-			break;
-		default:
-			print_code(hdr.code);
-	}
+	check_result(*res);
 
 OUT:
 	return;
@@ -264,7 +237,7 @@ static void func_exlay_del(int largc, char **largv)
 		case CODE_OK:
 			break;
 		default:
-			print_code(hdr.code);
+			check_result(hdr.code);
 	}
 
 OUT:
@@ -302,7 +275,7 @@ static void func_exlay_update(int largc, char **largv)
 		case CODE_OK:
 			break;
 		default:
-			print_code(hdr.code);
+			check_result(hdr.code);
 	}
 
 OUT:
@@ -326,14 +299,11 @@ int main(int argc, char **argv)
 {
 	int i;
 
-	if ((cli_sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
-		perror("socket");
-		return errno;
+	client = clnt_create(RPCSERVER, EXLAYPROG, EXLAYVERS, "udp");
+	if (client == NULL) {
+		clnt_pcreateerror(RPCSERVER);
+		exit(EXIT_FAILURE);
 	}
-
-	daem_addr_in.sin_family = AF_INET;
-	daem_addr_in.sin_port = DAEMON_PORT;
-	inet_aton("127.0.0.1", &daem_addr_in.sin_addr);
 
 	/*
 	 * argc must be 2, 3, or 4

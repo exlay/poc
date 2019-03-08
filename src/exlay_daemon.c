@@ -25,6 +25,7 @@ static struct sockaddr_in daem_addr_in;
 static int daem_sock;
 static socklen_t sk_len = sizeof(struct sockaddr_in);
 static int prot_ctr = 0;
+static int list_len = 0;
 static struct sockaddr_in cli_addr_in;
 
 struct proto_info prinfo_head;
@@ -74,112 +75,9 @@ static void init_stack(struct exlay_ep *ep, int nr_protos)
 	}
 }
 
-static void func_daem_list(void *buf, int len)
-{
-	debug_printf("cmd = list\n");
-	struct exlay_hdr *hdr = (struct exlay_hdr *)buf;
-	uint8_t *data = (uint8_t *)buf + EXLAYHDRSIZE;
-	int ret;
-
-	if (hdr->code != CODE_REQ) {
-		/* invalid request pkt */
-		goto OUT;
-	} 
-
-	hdr->code = CODE_OK;
-
-	struct proto_info *prt;
-	uint8_t *p;
-	for (prt = prinfo_head.fp, p = data; prt != &prinfo_head; prt = prt->fp) {
-		memcpy(p, prt->name, strlen(prt->name));
-		p += strlen(prt->name);
-		*p = '\n';
-		p++;
-	}
-
-OUT:
-	ret = sendto(daem_sock, buf, EXLAYHDRSIZE + strlen((char *)data), 0, 
-			(struct sockaddr *)&cli_addr_in, sk_len);
-
-	if (ret < 0) {
-		perror("sendto");
-	}
-	return;
-}
 
 static void func_daem_add(void *buf, int len)
 {
-	debug_printf("cmd = add\n");
-	struct exlay_hdr *hdr = (struct exlay_hdr *)buf;
-	uint8_t *data = (uint8_t *)buf + EXLAYHDRSIZE;
-	char prot_name[MAXPROTNAMELEN] = {0};
-	char *prot_path = (char *)malloc(sizeof(char) * hdr->len_proto_path);
-	memcpy(prot_name, data, hdr->len_proto_name);
-	memcpy(prot_path, data + hdr->len_proto_name, hdr->len_proto_path);
-	int ret;
-
-	if (hdr->code != CODE_REQ) {
-		/* invalid request pkt */
-		hdr->code = CODE_INVREQ;
-		memset(data, 0, len - EXLAYHDRSIZE);
-		/* XXX error message should be written */
-		goto OUT;
-	} 
-
-	if (prot_ctr >= MAXNRPROT) {
-		hdr->code = CODE_NEMPTY;
-		memset(data, 0, len - EXLAYHDRSIZE);
-		/* XXX error message should be written */
-		goto OUT;
-	}
-
-	struct proto_info *prt;
-	/* whether the protocol name to be added has already exist or not */
-	for (prt = prinfo_head.fp; prt != &prinfo_head; prt = prt->fp) {
-		if (strcmp(prt->name, prot_name) == 0) {
-			hdr->code = CODE_DUP;
-			memset(data, 0, len - EXLAYHDRSIZE);
-			/* XXX error message should be written */
-			goto OUT;
-		}
-	}
-	struct proto_info *new_prt;
-	new_prt = (struct proto_info *)malloc(sizeof(struct proto_info));
-	if (new_prt == NULL) {
-		hdr->code = CODE_NMEM;
-		memset(data, 0, len - EXLAYHDRSIZE);
-		/* XXX error message should be written */
-		goto OUT;
-	}
-	new_prt->path = (char *)malloc(sizeof(char) * hdr->len_proto_path);
-	memcpy(new_prt->name, prot_name, hdr->len_proto_name);
-	memcpy(new_prt->path, prot_path, hdr->len_proto_path);
-	prot_ctr++;
-
-	void *handle = dlopen(new_prt->path, RTLD_LAZY|RTLD_GLOBAL);
-	char *err;
-	if ((err = dlerror()) != NULL) {
-		fputs(err, stderr);
-		putchar('\n');
-		hdr->code = CODE_NG;
-		goto OUT;
-	}
-	
-
-	INSERT_TO_LIST_HEAD(&prinfo_head, new_prt);
-	debug_printf("prot %s (%s) was successfully added\n", 
-			new_prt->name, new_prt->path);
-
-	hdr->code = CODE_OK;
-
-OUT:
-	ret = sendto(daem_sock, buf, EXLAYHDRSIZE + strlen((char *)data), 0, 
-			(struct sockaddr *)&cli_addr_in, sk_len);
-
-	if (ret < 0) {
-		perror("sendto");
-	}
-	return;
 }
 
 static void func_daem_info(void *buf, int len)
@@ -291,7 +189,6 @@ struct daem_cmd {
 	uint8_t cmd;
 	void (*cmd_func)(void *buf, int len);
 } daem_cmd_table[NR_DAEM_CMDS + 1] = {
-	{CMD_LIST,    func_daem_list},
 	{CMD_ADD,     func_daem_add},
 	{CMD_INFO,    func_daem_info},
 	{CMD_DEL,     func_daem_del},
@@ -517,12 +414,12 @@ int *ex_dial_stack_1_svc(int ep, struct svc_req *rqstp)
 	return &result;
 }
 
-int *ex_listen_stack_1_svc(int ep, struct svc_req *rpstp)
+int *ex_listen_stack_1_svc(int ep, struct svc_req *rqstp)
 {
 	static int result;
 	return &result;
 }
-int *ex_close_stack_1_svc(int ep, struct svc_req *rpstp)
+int *ex_close_stack_1_svc(int ep, struct svc_req *rqstp)
 {
 	static int result = 0;
 	struct exlay_ep *p;
@@ -536,5 +433,99 @@ int *ex_close_stack_1_svc(int ep, struct svc_req *rpstp)
 	free(p);
 
 OUT:
+	return &result;
+}
+
+char **exlay_list_1_svc(struct svc_req *rqstp)
+{
+	static char *result = "";
+	static int first = 1;
+	debug_printf("cmd = list\n");
+
+	if (result != NULL && !first) {
+		free(result);
+	}
+
+	if (list_len > 0) {
+		char *p;
+		first = 0;
+		result = malloc(list_len);
+		memset(result, '\0', list_len);
+
+		struct proto_info *prt;
+		for (prt = prinfo_head.fp, p = result; prt != &prinfo_head; prt = prt->fp) {
+			memcpy(p, prt->name, strlen(prt->name));
+			p += (strlen(prt->name));
+			*p++ = '\n';
+		}
+		*p = '\0';
+	} 
+
+OUT:
+	return &result;
+}
+
+int *exlay_add_1_svc(char *proto, char *path, struct svc_req *rqstp)
+{
+	static int result = 0;
+	debug_printf("cmd = add\n");
+	if (result) {
+		result = 0;
+	}
+
+	struct proto_info *prt;
+	/* whether the protocol name to be added has already exist or not */
+	for (prt = prinfo_head.fp; prt != &prinfo_head; prt = prt->fp) {
+		if (strcmp(prt->name, proto) == 0) {
+			result = CODE_DUP;
+			goto OUT;
+		}
+	}
+	struct proto_info *new_prt;
+	new_prt = (struct proto_info *)malloc(sizeof(struct proto_info));
+	if (new_prt == NULL) {
+		result = CODE_NMEM;
+		goto OUT;
+	}
+	new_prt->path = (char *)malloc(sizeof(char) * strlen(path));
+	new_prt->name = (char *)malloc(sizeof(char) * strlen(proto));
+	memcpy(new_prt->name, proto, strlen(proto));
+	memcpy(new_prt->path, path, strlen(path));
+	new_prt->name[strlen(proto)] = '\0';
+	new_prt->path[strlen(path)] = '\0';
+	prot_ctr++;
+	list_len += (strlen(proto) + 1);
+
+	void *handle = dlopen(new_prt->path, RTLD_LAZY|RTLD_GLOBAL);
+	char *err;
+	if ((err = dlerror()) != NULL) {
+		fputs(err, stderr);
+		putchar('\n');
+		result = CODE_NFND;
+		goto OUT;
+	}
+	INSERT_TO_LIST_HEAD(&prinfo_head, new_prt);
+	debug_printf("prot %s (%s) was successfully added\n", 
+			new_prt->name, new_prt->path);
+
+OUT:
+	return &result;
+}
+
+int *exlay_del_1_svc(char *proto, struct svc_req *rqstp)
+{
+	static int result = 0;
+	return &result;
+}
+
+char **exlay_info_1_svc(char *proto, struct svc_req *rqstp)
+{
+	static char **result;
+	return result;
+}
+
+int *exlay_update_1_svc(char *proto, char *new_path, struct svc_req *rqstp)
+{
+	static int result = 0;
 	return &result;
 }
