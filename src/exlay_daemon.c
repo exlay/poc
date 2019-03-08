@@ -2,13 +2,17 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include <sys/socket.h>
 #include <errno.h>
 #include <string.h>
 #include <netinet/in.h>
 #include <sys/mman.h>
 #include <dlfcn.h>
-
+#include <sys/socket.h>
+#include <linux/if_packet.h>
+#include <net/ethernet.h>
+#include <arpa/inet.h>
+#include <error.h>
+#include <dlfcn.h>
 #include <rpc/rpc.h>
 
 #include "exlay.h"
@@ -21,9 +25,18 @@ static socklen_t sk_len = sizeof(struct sockaddr_in);
 static int prot_ctr = 0;
 static struct sockaddr_in cli_addr_in;
 
-struct proto_info list_head;
+struct proto_info prinfo_head;
 struct binding_tree root;
 
+struct exlay_ep ep_head = {
+	.fp = &ep_head,
+	.bp = &ep_head,
+};
+
+static void reflect_to_binding_tree(struct exlay_ep *exep)
+{
+
+}
 static int init_exlay(void)
 {
 	root.upper = &root;
@@ -31,21 +44,33 @@ static int init_exlay(void)
 	root.fp = &root;
 }
 
-void add_to_list(struct proto_info *p)
+
+
+static struct exlay_ep *get_ep_from_sock(int sock)
 {
-	p->prev = &list_head;
-	p->next = list_head.next;
-	list_head.next->prev = p;
-	list_head.next = p;
+	struct exlay_ep *p;
+	for (p = ep_head.fp; p != &ep_head; p = p->fp) {
+		if (sock == p->sock) {
+			/* found */
+			return p;
+		}
+	}
+	/* if not found */
+	return NULL;
 }
 
-void del_from_list(struct proto_info *p)
+static void init_stack(struct exlay_ep *ep, int nr_protos)
 {
-	p->prev->next = p->next;
-	p->next->prev = p->prev;
-	p->prev = p->next = NULL;
+	int i;
+	ep->nr_protos = nr_protos;
+	for (i = 0; i < nr_protos; i++) {
+		ep->btm[i].layer = i + 1;
+		ep->btm[i].proto = NULL;
+		ep->btm[i].lbind = NULL;
+		ep->btm[i].rbind = NULL;
+		ep->btm[i].upper = NULL;
+	}
 }
-
 
 static void func_daem_list(void *buf, int len)
 {
@@ -63,7 +88,7 @@ static void func_daem_list(void *buf, int len)
 
 	struct proto_info *prt;
 	uint8_t *p;
-	for (prt = list_head.next, p = data; prt != &list_head; prt = prt->next) {
+	for (prt = prinfo_head.fp, p = data; prt != &prinfo_head; prt = prt->fp) {
 		memcpy(p, prt->name, strlen(prt->name));
 		p += strlen(prt->name);
 		*p = '\n';
@@ -108,7 +133,7 @@ static void func_daem_add(void *buf, int len)
 
 	struct proto_info *prt;
 	/* whether the protocol name to be added has already exist or not */
-	for (prt = list_head.next; prt != &list_head; prt = prt->next) {
+	for (prt = prinfo_head.fp; prt != &prinfo_head; prt = prt->fp) {
 		if (strcmp(prt->name, prot_name) == 0) {
 			hdr->code = CODE_DUP;
 			memset(data, 0, len - EXLAYHDRSIZE);
@@ -139,7 +164,7 @@ static void func_daem_add(void *buf, int len)
 	}
 	
 
-	add_to_list(new_prt);
+	INSERT_TO_LIST_HEAD(&prinfo_head, new_prt);
 	debug_printf("prot %s (%s) was successfully added\n", 
 			new_prt->name, new_prt->path);
 
@@ -180,20 +205,20 @@ static void func_daem_del(void *buf, int len)
 
 	struct proto_info *prt;
 	/* whether the protocol name to be deleted has really exist or not */
-	for (prt = list_head.next; prt != &list_head; prt = prt->next) {
+	for (prt = prinfo_head.fp; prt != &prinfo_head; prt = prt->fp) {
 		if (strcmp(prt->name, prot_name) == 0) {
 			/* found */
 			break;
 		}
 	}
 
-	if (prt == &list_head) {
+	if (prt == &prinfo_head) {
 		hdr->code = CODE_NEXIST;
 		goto OUT;
 	}
 
 	prot_ctr--;
-	del_from_list(prt);
+	REMOVE_FROM_LIST(prt);
 	debug_printf("prot %s (%s) was successfully removed\n", 
 			prt->name, prt->path);
 	free(prt);
@@ -231,14 +256,14 @@ static void func_daem_update(void *buf, int len)
 
 	struct proto_info *prt;
 	/* whether the protocol name to be added has already exist or not */
-	for (prt = list_head.next; prt != &list_head; prt = prt->next) {
+	for (prt = prinfo_head.fp; prt != &prinfo_head; prt = prt->fp) {
 		if (strcmp(prt->name, prot_name) == 0) {
 			/* found */
 			break;
 		}
 	}
 
-	if (prt == &list_head) {
+	if (prt == &prinfo_head) {
 		hdr->code = CODE_NEXIST;
 		goto OUT;
 	}
@@ -290,7 +315,7 @@ int init_daemon(void)
 		return errno;
 	}
 
-	list_head.next = &list_head;
+	prinfo_head.fp = &prinfo_head;
 
 	return 0;
 }
@@ -331,4 +356,164 @@ int main(void)
 	}
 
 	return 0;
+}
+
+/* RPC svc */
+
+int *ex_create_stack_1_svc(unsigned int nr_layers, struct svc_req *rqstp)
+{
+	static int result;
+	struct exlay_ep *exep;
+	exep = (struct exlay_ep *)malloc(sizeof(struct exlay_ep));
+	exep->sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
+	exep->nr_protos = nr_layers;
+	exep->btm = (struct exlay_layer *)malloc(sizeof(struct exlay_layer) * nr_layers);
+	exep->top = &exep->btm[nr_layers - 1];
+	init_stack(exep, nr_layers);
+
+	if (exep->sock < 0) {
+		perror("ex_create_stack: socket:");
+	}
+	INSERT_TO_LIST_HEAD(&ep_head, exep);
+	//return exep->sock;
+	return &result;
+}
+
+int *ex_set_binding_1_svc(
+		int ep, 
+		unsigned int lyr, 
+		char *proto, 
+		char *lbind, 
+		char *upper, 
+		struct svc_req *rqstp)
+{
+	static int result = 0;
+
+	struct exlay_ep *exep;
+	char buf[strlen(proto)+6]; /* store name of "libXX.so" */
+	memset(buf, 0, sizeof(buf));
+	strncat(buf, "lib", 3);
+	strncat(buf, proto, strlen(proto));
+	strncat(buf, ".so", 3);
+
+	exep = get_ep_from_sock(ep);
+	if (exep == NULL) {
+		/* no such exlay endpoint */
+		result = -1;
+		goto OUT;
+	}
+	if (exep->nr_protos > lyr || lyr == 0) {
+		/* no such layer in the endpoint */
+		result = -1;
+		goto OUT;
+	}
+	/* XXX if ex_set_binding is already called before, notify */
+
+	/* load library of "proto" by protobj symbol */
+	void *handle = dlopen(buf, RTLD_NOW|RTLD_GLOBAL);
+	char *err;
+	if ((err = dlerror()) != NULL) {
+		fputs(err, stderr);
+		putchar('\n');
+		result = -1;
+		goto OUT;
+	}
+	/* XXX how should it specify the symbol name of protobj? */
+	exep->btm[lyr-1].proto = (struct protobj *)dlsym(handle, proto);
+	if ((err = dlerror()) != NULL) {
+		fputs(err, stderr);
+		putchar('\n');
+		result = -1;
+		goto OUT;
+	}
+
+	/* set requested binding */
+	uint8_t size = exep->btm[lyr-1].proto->bind_size;
+	uint8_t uplyr_type_s = exep->btm[lyr-1].proto->upper_type_size;
+	exep->btm[lyr-1].lbind = malloc(size);
+	memcpy(exep->btm[lyr-1].lbind, lbind, size);
+
+	if (upper != NULL) {
+		exep->btm[lyr-1].upper = malloc(uplyr_type_s);
+		memcpy(exep->btm[lyr-1].upper, upper, uplyr_type_s);
+	} else {
+		exep->btm[lyr-1].upper = NULL;
+	}
+
+OUT:
+	return &result;
+
+}
+
+int *ex_bind_stack_1_svc(int ep, struct svc_req *rqstp)
+{
+	static int result = 0;
+	struct exlay_ep *exep;
+	exep = get_ep_from_sock(ep);
+	if (exep == NULL) {
+		/* no such endpoint */
+		result = -1;
+		goto OUT;
+	}
+	/* reflect stack to binding_tree */
+	reflect_to_binding_tree(exep);
+
+OUT:
+	return &result;
+}
+int *ex_set_remote_1_svc(int ep, int lyr, char *binding, struct svc_req *rqstp)
+{
+	static int result = 0;
+
+	struct exlay_ep *exep;
+	exep = get_ep_from_sock(ep);
+	if (exep == NULL) {
+		/* no such endpoint */
+		result = -1;
+		goto OUT;
+	}
+	uint8_t size = exep->btm[lyr-1].proto->bind_size;
+	if (binding == NULL) {
+		free(exep->btm[lyr-1].rbind);
+	} else {
+		if (exep->btm[lyr-1].rbind == NULL) {
+		/* ex_set_remote is called for the first time */
+			if ((exep->btm[lyr-1].rbind = malloc(size)) == NULL) {
+				fprintf(stderr, "ex_set_remote: malloc: error: %d\n", errno);
+				result = errno;
+				goto OUT;
+			}
+		}
+		memcpy(exep->btm[lyr-1].rbind, binding, size);
+	}
+
+OUT:
+	return &result;
+}
+int *ex_dial_stack_1_svc(int ep, struct svc_req *rqstp)
+{
+	static int result;
+	return &result;
+}
+
+int *ex_listen_stack_1_svc(int ep, struct svc_req *rpstp)
+{
+	static int result;
+	return &result;
+}
+int *ex_close_stack_1_svc(int ep, struct svc_req *rpstp)
+{
+	static int result = 0;
+	struct exlay_ep *p;
+	p = get_ep_from_sock(ep);
+	if (p == NULL) {
+		/* no such exlay endpoint */
+		result = -1;
+		goto OUT;
+	}
+	REMOVE_FROM_LIST(p);
+	free(p);
+
+OUT:
+	return &result;
 }

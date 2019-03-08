@@ -77,7 +77,7 @@ $(SRCDIR)/%_clnt.c: $(SRCDIR)/%.x
 $(SRCDIR)/%_xdr.c: $(SRCDIR)/%.x
 	cd $(SRCDIR) && rpcgen -Nc $(notdir $<) > ../$@
 
-tag: tags cscope.out
+tags: 
 	ctags -R
 	cscope -Rb
 

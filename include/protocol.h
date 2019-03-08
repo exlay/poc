@@ -28,8 +28,8 @@ struct exlay_ep {
 	struct exlay_layer *top; /* top layer */
 	struct exlay_layer *btm; /* buttom layer */
 	struct exlay_layer *cur; /* current layer */
-	struct exlay_ep *prev; /* used by exlay system for an endpoint search */
-	struct exlay_ep *next; /* used by exlay system for an ednpoing search */
+	struct exlay_ep *fp; /* used by exlay system for an endpoint search */
+	struct exlay_ep *bp; /* used by exlay system for an ednpoing search */
 };
 
 struct exlay_layer {

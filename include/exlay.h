@@ -13,6 +13,29 @@
 #define debug_printf(fmt, ...)
 #endif
 
+#define INSERT_TO_LIST_HEAD(h, p) \
+		do {\
+				(p)->bp = (h); \
+				(p)->fp = (h)->fp; \
+				(h)->fp->bp = (p); \
+				(h)->fp = (p);	\
+		   	} while (0)
+
+#define INSERT_TO_LIST_TAIL(h, p) \
+		do {\
+				(p)->bp = (h)->bp; \
+				(p)->fp = (h)->fp->bp; \
+				(h)->bp->fp = (p);	\
+				(h)->bp = (p); \
+		   	} while (0)
+
+#define REMOVE_FROM_LIST(p) \
+		do {\
+				(p)->bp->fp = (p)->fp; \
+				(p)->fp->bp = (p)->bp; \
+				(p)->fp = (p)->bp = NULL;	\
+		   	} while (0)
+
 #define MAXCMDLEN 6
 
 #define MAXBUFLEN 65536
@@ -21,15 +44,9 @@
 #define MAXPROTPATHLEN 256
 #define EXLAYHDRSIZE (sizeof(struct exlay_hdr))
 
-#define MAXPAYLSIZE ( ((MAXPROTNAMELEN * MAXNRPROT) > (MAXPROTNAMELEN + MAXBUFLEN)) ? \
-	   	(MAXPROTNAMELEN * MAXNRPROT) : (MAXPROTNAMELEN + MAXBUFLEN) )
-
-
-#define RPCSERVER "127.0.0.1"
-
 struct proto_info {
-	struct proto_info *next;
-	struct proto_info *prev;
+	struct proto_info *fp;
+	struct proto_info *bp;
 	char name[MAXPROTNAMELEN];
 	char *path;
 	time_t ctime;
@@ -145,3 +162,6 @@ int ex_recv_stack(int ep, char *buf, uint32_t size);
 
 int ex_close_stack(int ep);
 
+#define RPCSERVER "127.0.0.1" 
+#define MAXPAYLSIZE ( ((MAXPROTNAMELEN * MAXNRPROT) > (MAXPROTNAMELEN + MAXBUFLEN)) ? \
+		(MAXPROTNAMELEN * MAXNRPROT) : (MAXPROTNAMELEN + MAXBUFLEN) )
