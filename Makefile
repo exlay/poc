@@ -30,6 +30,8 @@ XDROUTS = $(INCDIR)/$(XDRHDR) \
 RM = rm -rf
 RMDIR = rmdir
 
+TAGS = tags cscope.out
+
 SRCS = $(wildcard $(SRCDIR)/*.c)
 OBJS = $(addprefix $(OBJDIR)/,$(notdir $(SRCS:%.c=%.o)))
 DEPS = $(OBJS:%.o=%.d)
@@ -43,14 +45,17 @@ SRCFS = $(notdir $(SRCS))
 OBJFS = $(SRCFS:%.c=%.o)
 DEPFS = $(SRCFS:%.c=%.d)
 
-.PHONY: clean tag all rpc
+.PHONY: clean tag all rpc sample protocols exlay
 .PRECIOUS: $(OBJS) $(DEPS)
 
-all: 
-	+make $(XDROUTS)
-	+make $(LIB)
-	+make $(BINS) 
+all: exlay protocols sample
+
+exlay: $(XDROUTS) $(LIB) $(BINS)
+
+protocols:
 	+make -C ./protocols
+
+sample:
 	+make -C ./sample
 
 $(BINDIR)/%: $(OBJDIR)/%.o
@@ -77,13 +82,12 @@ $(SRCDIR)/%_clnt.c: $(SRCDIR)/%.x
 $(SRCDIR)/%_xdr.c: $(SRCDIR)/%.x
 	cd $(SRCDIR) && rpcgen -Nc $(notdir $<) > ../$@
 
-tags: 
+tag:
 	ctags -R
 	cscope -Rb
 
-
 clean:
-	$(RM) $(OBJS) $(DEPS) $(BINS) $(LIB) $(XDROUTS)
+	$(RM) $(OBJS) $(DEPS) $(BINS) $(LIB) $(XDROUTS) $(TAGS)
 	-$(RMDIR) $(OBJDIR) $(BINDIR) $(LIBDIR)
 	make -C ./protocols clean
 	make -C ./sample clean
