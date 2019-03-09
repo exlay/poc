@@ -177,7 +177,7 @@ static void func_exlay_add(int largc, char **largv)
 		func_exlay_help(largc, largv);
 		goto OUT;
 	}
-	res = exlay_add_1(largv[2], largv[3], client);
+	res = exlay_add_1(largv[2], client);
 	if (res == NULL) {
 		clnt_perror(client, RPCSERVER);
 		exit(EXIT_FAILURE);
@@ -209,36 +209,17 @@ OUT:
 
 static void func_exlay_del(int largc, char **largv)
 {
+	int *res;
 	if (largc != 3) {
 		func_exlay_help(largc, largv);
 		goto OUT;
 	}
-	struct exlay_hdr hdr = {
-		.cmd = CMD_DEL,
-		.code = CODE_REQ,
-		.len_proto_name = strlen(largv[2]),
-		.len_proto_path = 0,
-	};
-
-	int ret;
-	uint8_t data[MAXPKTSIZE] = {0};
-	int data_len = hdr.len_proto_name + hdr.len_proto_path;
-	
-	memcpy(data, largv[2], hdr.len_proto_name);
-
-	ret = send_and_recv_pkt(&hdr, data, &data_len);
-
-	if (hdr.cmd != CMD_DEL) {
-		fprintf(stderr, "operation not supported\n");
-		goto OUT;
+	res = exlay_del_1(largv[2], client);
+	if (res == NULL) {
+		clnt_perror(client, RPCSERVER);
+		exit(EXIT_FAILURE);
 	}
-
-	switch (hdr.code) {
-		case CODE_OK:
-			break;
-		default:
-			check_result(hdr.code);
-	}
+	check_result(*res);
 
 OUT:
 	return;

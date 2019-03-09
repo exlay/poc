@@ -8,7 +8,7 @@ program EXLAYPROG {
 		int EX_LISTEN_STACK(int) = 6;
 		int EX_CLOSE_STACK(int) = 7;
 		string EXLAY_LIST(void) = 8;
-		int EXLAY_ADD(string, string) = 9;
+		int EXLAY_ADD(string) = 9;
 		int EXLAY_DEL(string) = 10;
 		string EXLAY_INFO(string) = 11;
 		int EXLAY_UPDATE(string, string) = 12;
