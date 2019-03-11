@@ -14,6 +14,8 @@
 #include <error.h>
 #include <dlfcn.h>
 #include <rpc/rpc.h>
+#include <linux/if.h>
+#include <sys/ioctl.h>
 
 #include "exlay.h"
 #include "protocol.h"
@@ -24,12 +26,13 @@
 #define LIBSUFFFIX ".so"
 
 extern void exlayprog_1(struct svc_req *rqstp, register SVCXPRT *transp);
-static struct sockaddr_in daem_addr_in;
+static struct sockaddr_ll daem_addr_ll;
 static int daem_sock;
-static socklen_t sk_len = sizeof(struct sockaddr_in);
+static socklen_t sk_len = sizeof(struct sockaddr_ll);
 static int prot_ctr = 0;
 static int list_len = 0;
 static struct sockaddr_in cli_addr_in;
+static unsigned char exsock = 0;
 
 struct proto_info prinfo_head;
 struct binding_tree root;
@@ -40,6 +43,19 @@ struct exlay_ep ep_head = {
 	.fp = &ep_head,
 	.bp = &ep_head,
 };
+
+static char *get_libpath(char *proto)
+{
+	char *ret = NULL;
+	struct proto_info *p;
+	for (p = prinfo_head.fp; p != &prinfo_head; p = p->fp) {
+		if (strcmp(proto, p->name) == 0) {
+			/* found */
+			ret = p->path;
+			break;
+		}
+	}
+}
 
 static void reflect_to_binding_tree(struct exlay_ep *exep)
 {
@@ -58,7 +74,7 @@ static struct exlay_ep *get_ep_from_sock(int sock)
 {
 	struct exlay_ep *p;
 	for (p = ep_head.fp; p != &ep_head; p = p->fp) {
-		if (sock == p->sock) {
+		if (sock == p->ep) {
 			/* found */
 			return p;
 		}
@@ -67,11 +83,11 @@ static struct exlay_ep *get_ep_from_sock(int sock)
 	return NULL;
 }
 
-static void init_stack(struct exlay_ep *ep, int nr_protos)
+static void init_stack(struct exlay_ep *ep, int nr_layers)
 {
 	int i;
-	ep->nr_protos = nr_protos;
-	for (i = 0; i < nr_protos; i++) {
+	ep->nr_layers = nr_layers;
+	for (i = 0; i < nr_layers; i++) {
 		ep->btm[i].layer = i + 1;
 		ep->btm[i].proto = NULL;
 		ep->btm[i].lbind = NULL;
@@ -157,20 +173,42 @@ struct daem_cmd {
 };
 
 
-int init_daemon(void)
+int init_daemon(char *ifname)
 {
-	if ((daem_sock = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+	struct ifreq if_req;
+	
+	if ((daem_sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL))) < 0) {
 		perror("socket");
 		return errno;
 	}
 
-	memset(&daem_addr_in, 0, sizeof(struct sockaddr_in));
-	daem_addr_in.sin_family = AF_INET;
-	daem_addr_in.sin_port = DAEMON_PORT;
-	daem_addr_in.sin_addr.s_addr = htonl(INADDR_ANY);
+	memset(&daem_addr_ll, 0, sizeof(struct sockaddr_ll));
+	strncpy(if_req.ifr_name, ifname, strlen(ifname));
 
-	if (bind(daem_sock, (struct sockaddr *)&daem_addr_in, sizeof(struct sockaddr_in)) < 0) {
+	if (ioctl(daem_sock, SIOCGIFINDEX, &if_req) < 0) {
+		perror("ioctl");
+		close(daem_sock);
+		return errno;
+	}
+	daem_addr_ll.sll_family = PF_PACKET;
+	daem_addr_ll.sll_protocol = htons(ETH_P_ALL);
+	daem_addr_ll.sll_ifindex = if_req.ifr_ifindex; 
+
+	if (bind(daem_sock, (struct sockaddr *)&daem_addr_ll, sizeof(struct sockaddr_ll)) < 0) {
 		perror("bind");
+		return errno;
+	}
+
+	if (ioctl(daem_sock, SIOCGIFFLAGS, &if_req) < 0) {
+		perror("ioctl");
+		close(daem_sock);
+		return errno;
+	}
+	
+	if_req.ifr_flags = if_req.ifr_flags|IFF_PROMISC|IFF_UP;
+	if (ioctl(daem_sock, SIOCSIFFLAGS, &if_req) < 0) {
+		perror("ioctl");
+		close(daem_sock);
 		return errno;
 	}
 
@@ -183,8 +221,12 @@ int main(int argc, char **argv, char **env)
 {
 	int ret;
 	uint8_t buf[MAXPKTSIZE] = {0};
+	if (argc != 2) {
+		fprintf(stderr, "usage: exlay_daemon <ifname>\n");
+		return EXIT_FAILURE;
+	}
 
-	if (init_daemon() != 0) {
+	if (init_daemon(argv[1]) != 0) {
 		return EXIT_FAILURE;
 	}
 	init_exlay();
@@ -216,49 +258,51 @@ int *ex_create_stack_1_svc(unsigned int nr_layers, struct svc_req *rqstp)
 	static int result;
 	struct exlay_ep *exep;
 	exep = (struct exlay_ep *)malloc(sizeof(struct exlay_ep));
-	exep->sock = socket(AF_PACKET, SOCK_RAW, htons(ETH_P_ALL));
-	exep->nr_protos = nr_layers;
+	exep->nr_layers = nr_layers;
+	exep->ep = ++exsock;
 	exep->btm = (struct exlay_layer *)malloc(sizeof(struct exlay_layer) * nr_layers);
 	exep->top = &exep->btm[nr_layers - 1];
 	init_stack(exep, nr_layers);
 
-	if (exep->sock < 0) {
-		perror("ex_create_stack: socket:");
-	}
 	INSERT_TO_LIST_HEAD(&ep_head, exep);
 	//return exep->sock;
+	result = exep->ep;
 	return &result;
 }
 
 int *ex_set_binding_1_svc(
-		int ep, 
+		int exsock, 
 		unsigned int lyr, 
 		char *proto, 
-		char *lbind, 
-		char *upper, 
+		binding lbind, 
+		unsigned int bsize, 
+		int upper, 
 		struct svc_req *rqstp)
 {
 	static int result = 0;
 
 	struct exlay_ep *exep;
-	char buf[strlen(proto)+6]; /* store name of "libXX.so" */
-	memset(buf, 0, sizeof(buf));
-	strncat(buf, "lib", 3);
-	strncat(buf, proto, strlen(proto));
-	strncat(buf, ".so", 3);
+	char *buf;
 
-	exep = get_ep_from_sock(ep);
+	exep = get_ep_from_sock(exsock);
 	if (exep == NULL) {
 		/* no such exlay endpoint */
 		result = -1;
 		goto OUT;
 	}
-	if (exep->nr_protos > lyr || lyr == 0) {
+	if (exep->nr_layers > lyr || lyr == 0) {
 		/* no such layer in the endpoint */
 		result = -1;
 		goto OUT;
 	}
 	/* XXX if ex_set_binding is already called before, notify */
+
+	buf = get_libpath(proto);
+	if (buf == NULL) {
+		/* cannot found protocol library */
+		result = -1;
+		goto OUT;
+	}
 
 	/* load library of "proto" by protobj symbol */
 	void *handle = dlopen(buf, RTLD_NOW|RTLD_GLOBAL);
@@ -282,11 +326,11 @@ int *ex_set_binding_1_svc(
 	uint8_t size = exep->btm[lyr-1].proto->bind_size;
 	uint8_t uplyr_type_s = exep->btm[lyr-1].proto->upper_type_size;
 	exep->btm[lyr-1].lbind = malloc(size);
-	memcpy(exep->btm[lyr-1].lbind, lbind, size);
+	memcpy(exep->btm[lyr-1].lbind, lbind.binding_val, size);
 
-	if (upper != NULL) {
+	if (upper != 0) {
 		exep->btm[lyr-1].upper = malloc(uplyr_type_s);
-		memcpy(exep->btm[lyr-1].upper, upper, uplyr_type_s);
+		memcpy(exep->btm[lyr-1].upper, &upper, uplyr_type_s);
 	} else {
 		exep->btm[lyr-1].upper = NULL;
 	}
@@ -312,7 +356,12 @@ int *ex_bind_stack_1_svc(int ep, struct svc_req *rqstp)
 OUT:
 	return &result;
 }
-int *ex_set_remote_1_svc(int ep, int lyr, char *binding, struct svc_req *rqstp)
+int *ex_set_remote_1_svc(
+		int ep, 
+		int lyr, 
+		binding rb, 
+		unsigned int bsize, 
+		struct svc_req *rqstp)
 {
 	static int result = 0;
 
@@ -324,8 +373,9 @@ int *ex_set_remote_1_svc(int ep, int lyr, char *binding, struct svc_req *rqstp)
 		goto OUT;
 	}
 	uint8_t size = exep->btm[lyr-1].proto->bind_size;
-	if (binding == NULL) {
-		free(exep->btm[lyr-1].rbind);
+	if (rb.binding_val == NULL) {
+		/* unreachable */
+		goto OUT;
 	} else {
 		if (exep->btm[lyr-1].rbind == NULL) {
 		/* ex_set_remote is called for the first time */
@@ -335,7 +385,7 @@ int *ex_set_remote_1_svc(int ep, int lyr, char *binding, struct svc_req *rqstp)
 				goto OUT;
 			}
 		}
-		memcpy(exep->btm[lyr-1].rbind, binding, size);
+		memcpy(exep->btm[lyr-1].rbind, rb.binding_val, size);
 	}
 
 OUT:

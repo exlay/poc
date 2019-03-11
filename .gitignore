@@ -17,6 +17,7 @@ exlay_rpc_svc.c
 exlay_rpc_xdr.c
 exlay_rpc.h
 
+.gdbinit
 build/
 bin/
 *.so

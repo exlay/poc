@@ -145,12 +145,13 @@ int ex_set_binding(
 		int ep, 
 		unsigned int layer, 
 		char *proto, 
-		char *lbind,
-		char *for_lower);
+		void *lbind,
+		unsigned int bsize, /* binding size */
+		int upper);
 
 int ex_bind_stack(int ep);
 
-int ex_set_remote(int ep, int layer, char *binding);
+int ex_set_remote(int ep, int layer, void *binding, unsigned int bsize);
 
 int ex_dial_stack(int ep);
 

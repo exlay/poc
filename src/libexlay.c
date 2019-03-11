@@ -66,14 +66,18 @@ int exlay_to_kern(struct exdata *exd, uint32_t len)
 }
 
 int ex_set_binding(
-		int ep,
+		int exsock,
 		unsigned int lyr, 
 		char *proto, 
-		char *lbind,
-		char *upper)
+		void *lbind,
+		unsigned int bsize,
+		int upper)
 {
 	int *res;
-	res = ex_set_binding_1(ep, lyr, proto, lbind, upper, client);
+	binding b;
+	b.binding_len = bsize;
+	b.binding_val = (char *)lbind;
+	res = ex_set_binding_1(exsock, lyr, proto, b, bsize, upper, client);
 	if (res == NULL) {
 		clnt_perror(client, RPCSERVER);
 		exit(EXIT_FAILURE);
@@ -92,10 +96,13 @@ int ex_bind_stack(int ep)
 	return *res;
 }
 
-int ex_set_remote(int ep, int lyr, char *binding)
+int ex_set_remote(int ep, int lyr, void *rbind, unsigned int bsize)
 {
 	int *res;
-	res = ex_set_remote_1(ep, lyr, binding, client);
+	binding rb;
+	rb.binding_len = bsize;
+	rb.binding_val = (char *)rbind;
+	res = ex_set_remote_1(ep, lyr, rb, bsize, client);
 	if (res == NULL) {
 		clnt_perror(client, RPCSERVER);
 		exit(EXIT_FAILURE);

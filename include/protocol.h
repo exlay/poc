@@ -22,9 +22,8 @@ struct protobj {
 
 /* exlay_ep: exlay endpoint is used in exlay system, not in app. */
 struct exlay_ep {
-	int sock;
-	uint8_t nr_protos;
-	char *ifname;
+	int ep;
+	uint8_t nr_layers;
 	struct exlay_layer *top; /* top layer */
 	struct exlay_layer *btm; /* buttom layer */
 	struct exlay_layer *cur; /* current layer */
@@ -35,9 +34,9 @@ struct exlay_ep {
 struct exlay_layer {
 	uint8_t layer;
 	struct protobj *proto;
-	void *upper; /* upper layer's ID: */
-	void *lbind;
-	void *rbind;
+	uint8_t *upper; /* upper layer's ID: */
+	uint8_t *lbind;
+	uint8_t *rbind;
 };
 
 struct binding_tree {
