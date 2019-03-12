@@ -24,9 +24,9 @@ static void test_ipv4_pull(
 		uint32_t *ent_size) {
 }
 
-struct protobj proto_ipv4 = {
+struct protobj test_ipv4 = {
 	.name = "test_ipv4",
-	.bind_size = 0,
+	.bind_size = 4,
 	.upper_type_size = 1, /* size of the Protocol field in the IPv4 header */
 	.d_input = test_ipv4_in,
 	.d_output = test_ipv4_out,

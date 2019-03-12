@@ -44,12 +44,18 @@ int main(void)
 	ret = ex_set_binding(es2, 1, "test_ethernet", mac, 6, ETHTYPE_ARP);
 	assert(ret == 0);
 	ret = ex_set_binding(es2, 2, "test_arp", mac, 6, 0);
+	assert(ret == 0);
+	ret = ex_bind_stack(es2);
+	assert(ret == 0);
 		
 	es3 = ex_create_stack(2);
 	assert(es2 > 0);
 	ret = ex_set_binding(es3, 1, "test_ethernet", mac, 6, ETHTYPE_IP4);
 	assert(ret == 0);
 	ret = ex_set_binding(es3, 2, "test_ipv4", &srcip, 4, IPPROTO_ICMP);
+	assert(ret == 0);
+	ret = ex_bind_stack(es3);
+	assert(ret == 0);
 
 	es4 = ex_create_stack(4);
 	assert(es2 > 0);
@@ -60,6 +66,8 @@ int main(void)
 	ret = ex_set_binding(es4, 3, "test_ethernet", mac, 6, ETHTYPE_IP4);
 	assert(ret == 0);
 	ret = ex_set_binding(es4, 4, "test_ipv4", &srcip, 4, IPPROTO_ICMP);
+	assert(ret == 0);
+	ret = ex_bind_stack(es4);
 	assert(ret == 0);
 
 	return 0;

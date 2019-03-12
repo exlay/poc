@@ -66,6 +66,8 @@ static struct binding_tree *add_protocol_to(
 	prt = malloc(sizeof(struct binding_tree));
 	memset(prt, 0, sizeof(struct binding_tree));
 	prt->protob = lyr->protob;
+	prt->layer = lyr->layer;
+	prt->lower = lyr_root->lower;
 	prt->fp = lyr_root->fp;
 	lyr_root->fp = prt;
 	return prt;
@@ -104,6 +106,8 @@ static struct binding_tree *add_binding_to(
 	}
 	ent->entry = lyr;
 	ent->fbind = prt_root->fbind;
+	ent->layer = lyr->layer;
+	ent->lower = prt_root->lower;
 	prt_root->fbind = ent;
 
 OUT:
@@ -163,21 +167,23 @@ static int reflect_to_binding_tree(struct exlay_ep *exep)
 				struct binding_tree *lyr_root;
 				lyr_root = (struct binding_tree *)malloc(sizeof(struct binding_tree));
 				if (lyr_root == NULL) {
-					result = -2;
+					result = CODE_NMEM;
 					break;
 				}
 				memset(lyr_root, 0, sizeof(struct binding_tree));
+				lyr_root->layer = i + 1;
 				bt->upper = lyr_root;
+				lyr_root->lower = bt;
 			}
 			prt = add_protocol_to(u_lyr, bt->upper);
-			add_binding_to(u_lyr, prt);
-		} else if (find_binding_in(u_lyr, prt) == NULL) {
+			prt = add_binding_to(u_lyr, prt);
+		} else if ((prt = find_binding_in(u_lyr, prt)) == NULL) {
 			/* u_lyr binding is not found in the bt layer */
-			add_binding_to(u_lyr, prt);
+			prt = add_binding_to(u_lyr, prt);
 		} else if (i == exep->nr_layers - 1) {
 			/* all requested bindings have already exist
 			 * return error value */
-			result = -1;
+			result = CODE_EBIND;
 		}
 		bt = prt;
 	}
@@ -185,11 +191,7 @@ static int reflect_to_binding_tree(struct exlay_ep *exep)
 }
 static int init_exlay(void)
 {
-	root.entry = NULL;
-	root.upper = NULL;
-	root.lower = NULL;
-	root.fp = NULL;
-	root.fbind = NULL;
+	memset(&root, 0, sizeof(struct binding_tree));
 	return 0;
 }
 
@@ -332,7 +334,8 @@ int *ex_set_binding_1_svc(
 		int upper, 
 		struct svc_req *rqstp)
 {
-	static int result = 0;
+	static int result;
+	result = CODE_OK;
 
 	struct exlay_ep *exep;
 	char *buf;
@@ -340,12 +343,12 @@ int *ex_set_binding_1_svc(
 	exep = get_ep_from_sock(exsock);
 	if (exep == NULL) {
 		/* no such exlay endpoint */
-		result = -1;
+		result = CODE_NEXEP;
 		goto OUT;
 	}
-	if (exep->nr_layers > lyr || lyr == 0) {
+	if (exep->nr_layers < lyr || lyr == 0) {
 		/* no such layer in the endpoint */
-		result = -1;
+		result = CODE_NLYR;
 		goto OUT;
 	}
 	/* XXX if ex_set_binding is already called before, notify */
@@ -353,7 +356,7 @@ int *ex_set_binding_1_svc(
 	buf = get_libpath(proto);
 	if (buf == NULL) {
 		/* cannot found protocol library */
-		result = -1;
+		result = CODE_NPRTLIB;
 		goto OUT;
 	}
 
@@ -363,7 +366,7 @@ int *ex_set_binding_1_svc(
 	if ((err = dlerror()) != NULL) {
 		fputs(err, stderr);
 		putchar('\n');
-		result = -1;
+		result = CODE_EDLOPEN;
 		goto OUT;
 	}
 	/* XXX how should it specify the symbol name of protobj? */
@@ -371,22 +374,24 @@ int *ex_set_binding_1_svc(
 	if ((err = dlerror()) != NULL) {
 		fputs(err, stderr);
 		putchar('\n');
-		result = -1;
+		result = CODE_EDLSHM;
 		goto OUT;
 	}
 
 	/* set requested binding */
 	uint8_t size = exep->btm[lyr-1].protob->bind_size;
-	if (bsize != size) {
+	if (bsize != size && size != 0) {
 		/* specify different binding size between 
 		 * protocol library and user definion 
 		 * */
-		result = -1;
+		result = CODE_EDIFFBS;
 	}
-	uint8_t uplyr_type_s = exep->btm[lyr-1].protob->upper_type_size;
-	exep->btm[lyr-1].lbind = malloc(size);
-	memcpy(exep->btm[lyr-1].lbind, lbind.binding_val, size);
+	if (size != 0) {
+		exep->btm[lyr-1].lbind = malloc(size);
+		memcpy(exep->btm[lyr-1].lbind, lbind.binding_val, size);
+	}
 
+	uint8_t uplyr_type_s = exep->btm[lyr-1].protob->upper_type_size;
 	if (upper != 0) {
 		exep->btm[lyr-1].upper = malloc(uplyr_type_s);
 		memcpy(exep->btm[lyr-1].upper, &upper, uplyr_type_s);
@@ -406,7 +411,7 @@ int *ex_bind_stack_1_svc(int exsock, struct svc_req *rqstp)
 	exep = get_ep_from_sock(exsock);
 	if (exep == NULL) {
 		/* no such endpoint */
-		result = -1;
+		result = CODE_NEXEP;
 		goto OUT;
 	}
 	/* reflect stack to binding_tree */
@@ -428,7 +433,7 @@ int *ex_set_remote_1_svc(
 	exep = get_ep_from_sock(ep);
 	if (exep == NULL) {
 		/* no such endpoint */
-		result = -1;
+		result = CODE_NEXEP;
 		goto OUT;
 	}
 	uint8_t size = exep->btm[lyr-1].protob->bind_size;
@@ -468,7 +473,7 @@ int *ex_close_stack_1_svc(int ep, struct svc_req *rqstp)
 	p = get_ep_from_sock(ep);
 	if (p == NULL) {
 		/* no such exlay endpoint */
-		result = -1;
+		result = CODE_NEXEP;
 		goto OUT;
 	}
 	REMOVE_FROM_LIST(p);
@@ -544,7 +549,7 @@ int *exlay_add_1_svc(char *proto, struct svc_req *rqstp)
 	if ((err = dlerror()) != NULL) {
 		fputs(err, stderr);
 		putchar('\n');
-		result = CODE_NFND;
+		result = CODE_NPRTLIB;
 		goto OUT;
 	}
 	INSERT_TO_LIST_HEAD(&prinfo_head, new_prt);
