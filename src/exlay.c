@@ -285,6 +285,16 @@ int main(int argc, char **argv)
 		clnt_pcreateerror(RPCSERVER);
 		exit(EXIT_FAILURE);
 	}
+	struct timeval to = {3600, 0};
+	struct timeval rto = {3600, 0};
+	if (clnt_control(client, CLSET_TIMEOUT, (char *)&to) < 0) {
+		fprintf(stderr, "clnt_control: failed to set timeout\n");
+		exit(EXIT_FAILURE);
+	}
+	if (clnt_control(client, CLSET_RETRY_TIMEOUT, (char *)&rto) < 0) {
+		fprintf(stderr, "clnt_control: failed to set retry timeout\n");
+		exit(EXIT_FAILURE);
+	}
 
 	/*
 	 * argc must be 2, 3, or 4

@@ -25,11 +25,11 @@
 
 CLIENT *client;
 static void init_libexlay() __attribute__((constructor));
+struct timeval to = {3600, 0};
+struct timeval rto = {3600, 0};
 
 void init_libexlay(void)
 {
-	struct timeval to = {3600, 0};
-	struct timeval rto = {3600, 0};
 	struct timeval dbg;
 	client = clnt_create(RPCSERVER, EXLAYPROG, EXLAYVERS, "udp");
 	if (client == NULL) {
