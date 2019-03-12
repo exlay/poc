@@ -33,17 +33,22 @@ struct exlay_ep {
 
 struct exlay_layer {
 	uint8_t layer;
-	struct protobj *proto;
+	struct protobj *protob;
 	uint8_t *upper; /* upper layer's ID: */
 	uint8_t *lbind;
 	uint8_t *rbind;
 };
 
+/* binding_tree represent the binding information tree to
+ * identify the exlay endpoint.
+ * e.g., MAC, IP addr, Port, others...*/
 struct binding_tree {
 	struct exlay_layer *entry;
-	struct binding_tree *upper;
+	struct protobj *protob;
+	struct binding_tree *upper; /* point to the upper layer */
 	struct binding_tree *lower;
-	struct binding_tree *fp;
+	struct binding_tree *fp; /* point to the next protocol in this layer */
+	struct binding_tree *fbind; /* point to the next bind */
 };
 
 extern int exd_out(struct exdata *exd, uint32_t len);

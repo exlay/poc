@@ -17,6 +17,7 @@
 #include <dlfcn.h>
 #include <string.h>
 #include <rpc/rpc.h>
+#include <time.h>
 
 #include "protocol.h"
 #include "exlay.h"
@@ -27,16 +28,27 @@ static void init_libexlay() __attribute__((constructor));
 
 void init_libexlay(void)
 {
-	printf("I am a constructor of libexlay\n");
+	struct timeval to = {3600, 0};
+	struct timeval rto = {3600, 0};
+	struct timeval dbg;
 	client = clnt_create(RPCSERVER, EXLAYPROG, EXLAYVERS, "udp");
 	if (client == NULL) {
 		clnt_pcreateerror(RPCSERVER);
 		exit(EXIT_FAILURE);
 	}
+	clnt_control(client, CLGET_TIMEOUT, (char *)&dbg);
+	if (clnt_control(client, CLSET_TIMEOUT, (char *)&to) < 0) {
+		fprintf(stderr, "clnt_control: failed to set timeout\n");
+		exit(EXIT_FAILURE);
+	}
+	clnt_control(client, CLGET_TIMEOUT, (char *)&dbg);
+	clnt_control(client, CLGET_RETRY_TIMEOUT, (char *)&dbg);
+	if (clnt_control(client, CLSET_RETRY_TIMEOUT, (char *)&rto) < 0) {
+		fprintf(stderr, "clnt_control: failed to set retry timeout\n");
+		exit(EXIT_FAILURE);
+	}
+	clnt_control(client, CLGET_RETRY_TIMEOUT, (char *)&dbg);
 }
-
-
-
 
 int exd_out(struct exdata *exd, uint32_t len)
 {

@@ -9,7 +9,7 @@ BINDIR = ./bin
 INCDIRS = ../include
 LIBDIRS = $(CURDIR)/../lib
 
-TARGETS = ether_app
+TARGETS = ether_app bind_test
 
 RM = rm -rf
 RMDIR = rmdir
