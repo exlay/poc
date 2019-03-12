@@ -26,7 +26,7 @@ static void test_arp_pull(
 		uint32_t *ent_size) {
 }
 
-struct protobj proto_arp = {
+struct protobj test_arp = {
 	.name = "test_arp",
 	.upper_type_size = 0,
 	.bind_size = 0,

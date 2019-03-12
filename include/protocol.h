@@ -22,29 +22,34 @@ struct protobj {
 
 /* exlay_ep: exlay endpoint is used in exlay system, not in app. */
 struct exlay_ep {
-	int sock;
-	uint8_t nr_protos;
-	char *ifname;
+	int ep;
+	uint8_t nr_layers;
 	struct exlay_layer *top; /* top layer */
 	struct exlay_layer *btm; /* buttom layer */
 	struct exlay_layer *cur; /* current layer */
-	struct exlay_ep *prev; /* used by exlay system for an endpoint search */
-	struct exlay_ep *next; /* used by exlay system for an ednpoing search */
+	struct exlay_ep *fp; /* used by exlay system for an endpoint search */
+	struct exlay_ep *bp; /* used by exlay system for an ednpoing search */
 };
 
 struct exlay_layer {
 	uint8_t layer;
-	struct protobj *proto;
-	void *upper; /* upper layer's ID: */
-	void *lbind;
-	void *rbind;
+	struct protobj *protob;
+	uint8_t *upper; /* upper layer's ID: */
+	uint8_t *lbind;
+	uint8_t *rbind;
 };
 
+/* binding_tree represent the binding information tree to
+ * identify the exlay endpoint.
+ * e.g., MAC, IP addr, Port, others...*/
 struct binding_tree {
+	uint8_t layer;
 	struct exlay_layer *entry;
-	struct binding_tree *upper;
+	struct protobj *protob;
+	struct binding_tree *upper; /* point to the upper layer */
 	struct binding_tree *lower;
-	struct binding_tree *fp;
+	struct binding_tree *fp; /* point to the next protocol in this layer */
+	struct binding_tree *fbind; /* point to the next bind */
 };
 
 extern int exd_out(struct exdata *exd, uint32_t len);

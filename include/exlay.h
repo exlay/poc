@@ -13,6 +13,29 @@
 #define debug_printf(fmt, ...)
 #endif
 
+#define INSERT_TO_LIST_HEAD(h, p) \
+		do {\
+				(p)->bp = (h); \
+				(p)->fp = (h)->fp; \
+				(h)->fp->bp = (p); \
+				(h)->fp = (p);	\
+		   	} while (0)
+
+#define INSERT_TO_LIST_TAIL(h, p) \
+		do {\
+				(p)->bp = (h)->bp; \
+				(p)->fp = (h)->fp->bp; \
+				(h)->bp->fp = (p);	\
+				(h)->bp = (p); \
+		   	} while (0)
+
+#define REMOVE_FROM_LIST(p) \
+		do {\
+				(p)->bp->fp = (p)->fp; \
+				(p)->fp->bp = (p)->bp; \
+				(p)->fp = (p)->bp = NULL;	\
+		   	} while (0)
+
 #define MAXCMDLEN 6
 
 #define MAXBUFLEN 65536
@@ -21,18 +44,12 @@
 #define MAXPROTPATHLEN 256
 #define EXLAYHDRSIZE (sizeof(struct exlay_hdr))
 
-#define MAXPAYLSIZE ( ((MAXPROTNAMELEN * MAXNRPROT) > (MAXPROTNAMELEN + MAXBUFLEN)) ? \
-	   	(MAXPROTNAMELEN * MAXNRPROT) : (MAXPROTNAMELEN + MAXBUFLEN) )
-
-
-
 struct proto_info {
-	struct proto_info *next;
-	struct proto_info *prev;
-	char name[MAXPROTNAMELEN];
+	struct proto_info *fp;
+	struct proto_info *bp;
+	char *name;
 	char *path;
 	time_t ctime;
-	char desc[MAXBUFLEN];
 	//struct netdev_ops *exlay_ops;
 };
 
@@ -67,78 +84,43 @@ struct exlay_hdr {
 #define CMD_UPDATE	0x05
 #define CMD_UNKNOWN 0xff
 
-#define CODE_REQ 0x00
-#define CODE_OK  0x01
+#define CODE_OK 0x00
 #define CODE_INVREQ 0x02
 #define CODE_NEMPTY 0x03
 #define CODE_DUP 0x04
 #define CODE_NMEM 0x05
 #define CODE_NEXIST 0x06
+#define CODE_NFND 0x07
+#define CODE_NEXEP 0x08
+#define CODE_NLYR 0x09
+#define CODE_NPRTLIB 0x0a
+#define CODE_EDLOPEN 0x0b
+#define CODE_EDLSHM 0x0c
+#define CODE_EDIFFBS 0x0d
+#define CODE_EBIND 0x0f
 #define CODE_NG  0xff
 
 #define NR_CMDS 6
 #define NR_DAEM_CMDS 5
 
-void print_exlay_hdr(struct exlay_hdr *hdr)
-{
-	debug_printf("========== exlay header ==========\n");
-	switch (hdr->cmd) {
-		case CMD_LIST:
-			debug_printf("cmd: CMD_LIST\n");
-			break;
-		case CMD_ADD:
-			debug_printf("cmd: CMD_ADD\n");
-			break;
-		case CMD_INFO:
-			debug_printf("cmd: CMD_INFO\n");
-			break;
-		case CMD_DEL:
-			debug_printf("cmd: CMD_DEL\n");
-			break;
-		case CMD_UPDATE:
-			debug_printf("cmd: CMD_UPDATE\n");
-			break;
-		default:
-			debug_printf("cmd: unknown command\n");
-	}
-	switch (hdr->code) {
-		case CODE_REQ:
-			debug_printf("code: CODE_REQ\n");
-			break;
-		case CODE_OK:
-			debug_printf("code: CODE_OK\n");
-			break;
-		case CODE_NG:
-			debug_printf("code: CODE_NG\n");
-			break;
-		default:
-			debug_printf("code: unknown code\n");
-	}
-	debug_printf("len_proto_name: %d\n", hdr->len_proto_name);
-	debug_printf("len_proto_path: %d\n", hdr->len_proto_path);
-	debug_printf("==================================\n");
-}
-#endif
-
-
-int ex_create_stack(int nr_layer);
-
+int ex_create_stack(unsigned int nr_layer);
 int ex_set_binding(
 		int ep, 
 		unsigned int layer, 
 		char *proto, 
 		void *lbind,
-		void *for_lower);
-
+		unsigned int bsize, /* binding size */
+		int upper);
 int ex_bind_stack(int ep);
-
-int ex_set_remote(int ep, int layer, void *binding);
-
+int ex_set_remote(int ep, int layer, void *binding, unsigned int bsize);
 int ex_dial_stack(int ep);
-
-int ex_send_stack(int ep, uint32_t size);
-
-int ex_recv_stack(int ep, uint32_t size);
-
+int ex_listen_stack(int ep);
+int ex_send_stack(int ep, char *buf, uint32_t size);
+int ex_recv_stack(int ep, char *buf, uint32_t size);
 int ex_close_stack(int ep);
 
+#define RPCSERVER "127.0.0.1" 
+#define MAXPAYLSIZE ( ((MAXPROTNAMELEN * MAXNRPROT) > (MAXPROTNAMELEN + MAXBUFLEN)) ? \
+		(MAXPROTNAMELEN * MAXNRPROT) : (MAXPROTNAMELEN + MAXBUFLEN) )
+
+#endif
