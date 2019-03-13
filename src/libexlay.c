@@ -135,12 +135,23 @@ int ex_dial_stack(int ep)
 	return *res;
 }
 
-int ex_send_stack(int ep, char *buf, uint32_t size)
+int ex_send_stack(int ep, void *buf, uint32_t size, int opt)
 {
-	return 0;
+	int *res;
+	msg msgbuf;
+	msgbuf.msg_len = size;
+	msgbuf.msg_val = (char *)buf;
+	res = ex_send_stack_1(ep, msgbuf, size, client);
+	if (res == NULL) {
+		clnt_perror(client, RPCSERVER);
+		exit(EXIT_FAILURE);
+	}
+	print_err(*res);
+	
+	return *res;
 }
 
-int ex_recv_stack(int ep, char *buf, uint32_t size)
+int ex_recv_stack(int ep, void *buf, uint32_t size, int opt)
 {
 	return 0;
 }

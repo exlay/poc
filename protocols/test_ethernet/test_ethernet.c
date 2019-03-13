@@ -5,7 +5,7 @@
 #include "test_ethernet.h"
 #include "protocol.h"
 
-struct test_ether ether_h;
+struct test_ether eth_h;
 
 static int test_ethernet_in(struct exdata *exd, uint32_t frame_len) {
 	exd_in(exd, frame_len);

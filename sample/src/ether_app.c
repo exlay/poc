@@ -14,7 +14,6 @@ int main(void)
 	int ret;
 	uint8_t mac[6] = {0x86, 0xfd, 0x5e, 0xfb, 0xfa, 0xce};
 	uint8_t dstmac[6] = {0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc};
-	int size = 100;
 
 	exsock = ex_create_stack(1);
 	assert(exsock > 0);
@@ -26,9 +25,9 @@ int main(void)
 	assert(ret == 0);
 	ret = ex_dial_stack(exsock);
 	assert(ret == 0);
-	ret = ex_send_stack(exsock, STRING, strlen(STRING));
+	ret = ex_send_stack(exsock, STRING, strlen(STRING), 0);
 	assert(ret >= 0);
-	ret = ex_recv_stack(exsock, STRING, strlen(STRING));
+	ret = ex_recv_stack(exsock, STRING, strlen(STRING), 0);
 	assert(ret >= 0);
 	ret = ex_close_stack(exsock);
 	assert(ret == 0);

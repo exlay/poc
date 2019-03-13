@@ -115,8 +115,8 @@ int ex_bind_stack(int ep);
 int ex_set_remote(int ep, int layer, void *binding, unsigned int bsize);
 int ex_dial_stack(int ep);
 int ex_listen_stack(int ep);
-int ex_send_stack(int ep, char *buf, uint32_t size);
-int ex_recv_stack(int ep, char *buf, uint32_t size);
+int ex_send_stack(int ep, void *buf, uint32_t size, int opt);
+int ex_recv_stack(int ep, void *buf, uint32_t size, int opt);
 int ex_close_stack(int ep);
 
 #define RPCSERVER "127.0.0.1" 

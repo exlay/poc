@@ -1,4 +1,5 @@
 typedef opaque binding<16>;
+typedef opaque msg<5000>;
 
 program EXLAYPROG {
 	version EXLAYVERS {
@@ -14,5 +15,7 @@ program EXLAYPROG {
 		int EXLAY_DEL(string) = 10;
 		string EXLAY_INFO(string) = 11;
 		int EXLAY_UPDATE(string, string) = 12;
+		int EX_SEND_STACK(int, msg, int) = 13;
+		int EX_RECV_STACK(int, msg, int) = 14;
 	} = 1;
 } = 0x20001001;

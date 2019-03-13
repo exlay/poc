@@ -167,7 +167,7 @@ static int reflect_to_binding_tree(struct exlay_ep *exep)
 				struct binding_tree *lyr_root;
 				lyr_root = (struct binding_tree *)malloc(sizeof(struct binding_tree));
 				if (lyr_root == NULL) {
-					result = CODE_NMEM;
+					result = -CODE_NMEM;
 					break;
 				}
 				memset(lyr_root, 0, sizeof(struct binding_tree));
@@ -183,7 +183,7 @@ static int reflect_to_binding_tree(struct exlay_ep *exep)
 		} else if (i == exep->nr_layers - 1) {
 			/* all requested bindings have already exist
 			 * return error value */
-			result = CODE_EBIND;
+			result = -CODE_EBIND;
 		}
 		bt = prt;
 	}
@@ -222,13 +222,6 @@ static void init_stack(struct exlay_ep *ep, int nr_layers)
 		ep->btm[i].upper = NULL;
 	}
 }
-
-
-
-
-
-
-
 
 int init_daemon(char *ifname)
 {
@@ -335,7 +328,7 @@ int *ex_set_binding_1_svc(
 		struct svc_req *rqstp)
 {
 	static int result;
-	result = CODE_OK;
+	result = -CODE_OK;
 
 	struct exlay_ep *exep;
 	char *buf;
@@ -343,12 +336,12 @@ int *ex_set_binding_1_svc(
 	exep = get_ep_from_sock(exsock);
 	if (exep == NULL) {
 		/* no such exlay endpoint */
-		result = CODE_NEXEP;
+		result = -CODE_NEXEP;
 		goto OUT;
 	}
 	if (exep->nr_layers < lyr || lyr == 0) {
 		/* no such layer in the endpoint */
-		result = CODE_NLYR;
+		result = -CODE_NLYR;
 		goto OUT;
 	}
 	/* XXX if ex_set_binding is already called before, notify */
@@ -356,7 +349,7 @@ int *ex_set_binding_1_svc(
 	buf = get_libpath(proto);
 	if (buf == NULL) {
 		/* cannot found protocol library */
-		result = CODE_NPRTLIB;
+		result = -CODE_NPRTLIB;
 		goto OUT;
 	}
 
@@ -366,7 +359,7 @@ int *ex_set_binding_1_svc(
 	if ((err = dlerror()) != NULL) {
 		fputs(err, stderr);
 		putchar('\n');
-		result = CODE_EDLOPEN;
+		result = -CODE_EDLOPEN;
 		goto OUT;
 	}
 	/* XXX how should it specify the symbol name of protobj? */
@@ -374,7 +367,7 @@ int *ex_set_binding_1_svc(
 	if ((err = dlerror()) != NULL) {
 		fputs(err, stderr);
 		putchar('\n');
-		result = CODE_EDLSHM;
+		result = -CODE_EDLSHM;
 		goto OUT;
 	}
 
@@ -384,7 +377,7 @@ int *ex_set_binding_1_svc(
 		/* specify different binding size between 
 		 * protocol library and user definion 
 		 * */
-		result = CODE_EDIFFBS;
+		result = -CODE_EDIFFBS;
 	}
 	if (size != 0) {
 		exep->btm[lyr-1].lbind = malloc(size);
@@ -411,7 +404,7 @@ int *ex_bind_stack_1_svc(int exsock, struct svc_req *rqstp)
 	exep = get_ep_from_sock(exsock);
 	if (exep == NULL) {
 		/* no such endpoint */
-		result = CODE_NEXEP;
+		result = -CODE_NEXEP;
 		goto OUT;
 	}
 	/* reflect stack to binding_tree */
@@ -433,7 +426,7 @@ int *ex_set_remote_1_svc(
 	exep = get_ep_from_sock(ep);
 	if (exep == NULL) {
 		/* no such endpoint */
-		result = CODE_NEXEP;
+		result = -CODE_NEXEP;
 		goto OUT;
 	}
 	uint8_t size = exep->btm[lyr-1].protob->bind_size;
@@ -473,13 +466,31 @@ int *ex_close_stack_1_svc(int ep, struct svc_req *rqstp)
 	p = get_ep_from_sock(ep);
 	if (p == NULL) {
 		/* no such exlay endpoint */
-		result = CODE_NEXEP;
+		result = -CODE_NEXEP;
 		goto OUT;
 	}
 	REMOVE_FROM_LIST(p);
 	free(p);
 
 OUT:
+	return &result;
+}
+
+int *ex_send_stack_1_svc(int ep, msg buf, int opt, struct svc_req *rqstp)
+{
+	static int result;
+	result = 0;
+	debug_printf("msg: %s\n", buf.msg_val);
+	result = buf.msg_len;
+	return &result;
+}
+
+int *ex_recv_stack_1_svc(int ep, msg buf, int opt, struct svc_req *rqstp)
+{
+	static int result;
+	result = 0;
+	debug_printf("msg: %s\n", buf.msg_val);
+	result = buf.msg_len;
 	return &result;
 }
 
@@ -524,14 +535,14 @@ int *exlay_add_1_svc(char *proto, struct svc_req *rqstp)
 	/* whether the protocol name to be added has already exist or not */
 	for (prt = prinfo_head.fp; prt != &prinfo_head; prt = prt->fp) {
 		if (strcmp(prt->name, proto) == 0) {
-			result = CODE_DUP;
+			result = -CODE_DUP;
 			goto OUT;
 		}
 	}
 	struct proto_info *new_prt;
 	new_prt = (struct proto_info *)malloc(sizeof(struct proto_info));
 	if (new_prt == NULL) {
-		result = CODE_NMEM;
+		result = -CODE_NMEM;
 		goto OUT;
 	}
 	new_prt->path = (char *)malloc(sizeof(char) * strlen(proto) + strlen(LIBPREFIX) + strlen(LIBSUFFFIX));
@@ -549,7 +560,7 @@ int *exlay_add_1_svc(char *proto, struct svc_req *rqstp)
 	if ((err = dlerror()) != NULL) {
 		fputs(err, stderr);
 		putchar('\n');
-		result = CODE_NPRTLIB;
+		result = -CODE_NPRTLIB;
 		goto OUT;
 	}
 	INSERT_TO_LIST_HEAD(&prinfo_head, new_prt);
@@ -575,7 +586,7 @@ int *exlay_del_1_svc(char *proto, struct svc_req *rqstp)
 	}
 
 	if (prt == &prinfo_head) {
-		result = CODE_NEXIST;
+		result = -CODE_NEXIST;
 		goto OUT;
 	}
 
