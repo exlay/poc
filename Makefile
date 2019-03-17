@@ -43,7 +43,7 @@ DEPS = $(OBJS:%.o=%.d)
 BINS = $(addprefix $(BINDIR)/,$(TARGETS))
 INCLUDE = $(addprefix -I,$(INCDIR))
 
-LIB = $(LIBDIR)/libexlay.so
+LIB = $(LIBDIR)/libexlay.so $(LIBDIR)/libproto.so
 PLIBDIR = $(CURDIR)/protocols/lib
 
 SRCFS = $(notdir $(SRCS))
@@ -69,7 +69,7 @@ $(EXLAYCLI): $(CLIOBJS)
 
 $(EXLAYDAEMON): $(DAEMONOBJS)
 	if [ ! -d "$(BINDIR)" ]; then mkdir $(BINDIR); fi
-	$(CC) $(CFLAGS) $(LIBRARY) -o $@ $^ $(LDFLAGS)
+	$(CC) $(CFLAGS) $(LIBRARY) -o $@ $^ $(LDFLAGS) -lproto
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
 	if [ ! -d "$(OBJDIR)" ]; then mkdir $(OBJDIR); fi

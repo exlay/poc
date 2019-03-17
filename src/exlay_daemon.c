@@ -17,6 +17,7 @@
 #include <linux/if.h>
 #include <sys/ioctl.h>
 #include <rpc/pmap_clnt.h>
+#include <net/ethernet.h>
 
 #include "exlay.h"
 #include "protocol.h"
@@ -28,7 +29,7 @@
 
 extern void exlayprog_1(struct svc_req *rqstp, register SVCXPRT *transp);
 static struct sockaddr_ll daem_addr_ll;
-static int daem_sock;
+int daem_sock;
 static int prot_ctr = 0;
 static int list_len = 0;
 static unsigned char exsock = 0;
@@ -187,6 +188,7 @@ static int reflect_to_binding_tree(struct exlay_ep *exep)
 		}
 		bt = prt;
 	}
+	exep->topb = bt;
 	return result;
 }
 static int init_exlay(void)
@@ -476,12 +478,45 @@ OUT:
 	return &result;
 }
 
+uint32_t reqired_bufsize(struct exlay_ep *ep)
+{
+	uint32_t ret = 0;
+	int i;
+	for (i = 0; i < ep->nr_layers; i++) {
+		ret += ep->btm[i].protob->hdr_size;
+	}
+	return ret;
+}
+
 int *ex_send_stack_1_svc(int ep, msg buf, int opt, struct svc_req *rqstp)
 {
 	static int result;
 	result = 0;
-	debug_printf("msg: %s\n", buf.msg_val);
-	result = buf.msg_len;
+
+	struct exlay_ep *p;
+	uint32_t total_hdr_size;
+	p = get_ep_from_sock(ep);
+	if (p == NULL) {
+		/* no such exlay endpoint */
+		result = -CODE_NEXEP;
+		goto OUT;
+	}
+	struct exdata exd;
+	total_hdr_size = reqired_bufsize(p);
+	if (buf.msg_len < ETH_ZLEN) {
+		exd.data = (uint8_t *)malloc(total_hdr_size + ETH_ZLEN);
+	} else {
+		exd.data = (uint8_t *)malloc(total_hdr_size + buf.msg_len);
+	}
+	exd.datalen = buf.msg_len;
+	exd.nxt_hdr = exd.data;
+	exd.cur = p->topb;
+
+	/* copy application data to exdata structure */
+	memcpy(exd.data + total_hdr_size, buf.msg_val, buf.msg_len);
+	p->top->protob->d_output(&exd, buf.msg_len);
+
+OUT:
 	return &result;
 }
 
@@ -489,7 +524,7 @@ int *ex_recv_stack_1_svc(int ep, msg buf, int opt, struct svc_req *rqstp)
 {
 	static int result;
 	result = 0;
-	debug_printf("msg: %s\n", buf.msg_val);
+	//debug_printf("msg: %s\n", buf.msg_val);
 	result = buf.msg_len;
 	return &result;
 }
@@ -612,3 +647,6 @@ int *exlay_update_1_svc(char *proto, char *new_path, struct svc_req *rqstp)
 	static int result = 0;
 	return &result;
 }
+
+/* for protocols */
+

@@ -51,17 +51,6 @@ void init_libexlay(void)
 	clnt_control(client, CLGET_RETRY_TIMEOUT, (char *)&dbg);
 }
 
-int exd_out(struct exdata *exd, uint32_t len)
-{
-	return len;
-}
-
-int exd_in(struct exdata *exd, uint32_t len)
-{
-	return len;
-}
-
-
 int ex_create_stack(unsigned int nr_protos)
 {
 	int *res;

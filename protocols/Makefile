@@ -1,7 +1,8 @@
 CC := gcc
 CFLAGS := -Wall -Wextra -ggdb -g3 -MMD -MP
 CFLAGS += -DDEBUG
-LDFLAGS =
+LDFLAGS = -lproto
+LIBDIR = ../lib
 
 INCDIRS := ../include
 INCLUDE = $(addprefix -I,$(INCDIRS))
@@ -26,7 +27,7 @@ all: $(LIBS)
 
 $(LIBS): %.so: %.o
 	if [ ! -d $(LINKDIR) ]; then mkdir $(LINKDIR); fi
-	$(CC) -shared -Wl,-soname,$(LINKDIR)/lib$(notdir $@) -o $@ $^
+	$(CC) -shared -Wl,-soname,$(LINKDIR)/lib$(notdir $@) -o $@ $^ -L../lib $(LDFLAGS)
 	$(LN) ../$@ $(LINKDIR)/lib$(notdir $@) 
 
 $(OBJS): %.o: %.c
