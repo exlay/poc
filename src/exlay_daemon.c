@@ -511,6 +511,7 @@ int *ex_send_stack_1_svc(int ep, msg buf, int opt, struct svc_req *rqstp)
 	exd.datalen = buf.msg_len;
 	exd.nxt_hdr = exd.data;
 	exd.cur = p->topb;
+	exd.sock = daem_sock;
 
 	/* copy application data to exdata structure */
 	memcpy(exd.data + total_hdr_size, buf.msg_val, buf.msg_len);

@@ -3,6 +3,7 @@
 /* exdata: the data structure in exlay
  * */
 struct exdata {
+	int sock;
 	uint8_t *data;
 	uint32_t datalen;
 	uint8_t *nxt_hdr;

@@ -33,7 +33,7 @@ int exd_out(struct exdata *exd, uint32_t len)
 
 	if (exd->cur->lower == NULL) {
 		/* reach the buttom of this stack */
-		result = write(3, exd->data, len);
+		result = write(exd->sock, exd->data, len);
 	} else {
 		/* go to lower layer */
 		result = exd->cur->protob->d_output(exd, len);
