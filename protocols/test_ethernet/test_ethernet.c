@@ -12,12 +12,13 @@ static uint8_t zeromac[6] = {0};
 
 struct test_ether eth_h;
 
-static int test_ethernet_in(struct exdata *exd, uint32_t datalen) {
-
+static int test_ethernet_in(struct exdata *exd, uint32_t datalen)
+{
 	return exd_in(exd, datalen);
 }
 
-static int test_ethernet_out(struct exdata *exd, uint32_t datalen) {
+static int test_ethernet_out(struct exdata *exd, uint32_t datalen) 
+{
 	int ret;
 	uint32_t bsize;
 	uint32_t upsize;

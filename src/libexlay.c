@@ -29,6 +29,21 @@ static void init_libexlay() __attribute__((constructor));
 struct timeval to = {3600, 0};
 struct timeval rto = {3600, 0};
 
+/* for ex_{send,recv}_stack */
+static int rd;
+static int wd;
+
+struct cli_ios {
+	int ep;
+	int rd;
+	int wd;
+	cli_io cio;
+	struct cli_ios *fp;
+	struct cli_ios *bp;
+};
+
+static struct cli_ios cli_ios_head;
+
 void init_libexlay(void)
 {
 	struct timeval dbg;
@@ -49,6 +64,8 @@ void init_libexlay(void)
 		exit(EXIT_FAILURE);
 	}
 	clnt_control(client, CLGET_RETRY_TIMEOUT, (char *)&dbg);
+
+	cli_ios_head.fp = cli_ios_head.bp = &cli_ios_head;
 }
 
 int ex_create_stack(unsigned int nr_protos)
@@ -59,12 +76,20 @@ int ex_create_stack(unsigned int nr_protos)
 		clnt_perror(client, RPCSERVER);
 		exit(EXIT_FAILURE);
 	}
-	return *res;
-}
+	
+	struct cli_ios *io;
+	io = (struct cli_ios *)malloc(sizeof(struct cli_ios));
+	if (io == NULL) {
+		*res = -CODE_NMEM;
+		goto OUT;
+	}
 
-int exlay_to_kern(struct exdata *exd, uint32_t len)
-{
-	return len;
+	memset(io, 0, sizeof(struct cli_ios));
+	io->ep = *res;
+	
+	INSERT_TO_LIST_HEAD(&cli_ios_head, io);
+OUT:
+	return *res;
 }
 
 int ex_set_binding(
@@ -88,15 +113,52 @@ int ex_set_binding(
 	return *res;
 }
 
+static struct cli_ios *get_cli_from_ep(int ep)
+{
+	struct cli_ios *p;
+	for (p = cli_ios_head.fp; p != &cli_ios_head; p = p->fp) {
+		if (ep == p->ep) {
+			/* found */
+			return p;
+		}
+	}
+	/* if not found */
+	return NULL;
+}
+
 int ex_bind_stack(int ep)
 {
-	int *res;
-	res = ex_bind_stack_1(ep, client);
-	if (res == NULL) {
+	int res = 0;
+	struct cli_ios *p;
+	cli_io *tmp;
+	p = get_cli_from_ep(ep);
+	if (p == NULL) {
+		fprintf(stderr, "no soch exlay endpoint\n");
+		res = -CODE_NEXIST;
+		goto OUT;
+	}
+	tmp = ex_bind_stack_1(ep, client);
+	if (tmp == NULL) {
 		clnt_perror(client, RPCSERVER);
 		exit(EXIT_FAILURE);
 	}
-	return *res;
+	memcpy(&p->cio, tmp, sizeof(cli_io)); 
+	p->rd = open(p->cio.rpath, O_RDWR);
+	if (p->rd < 0) {
+		perror("open: read fifo");
+		res = -errno;
+		goto OUT;
+	}
+
+	p->wd = open(p->cio.wpath, O_RDWR);
+	if (p->wd < 0) {
+		perror("open: write fifo");
+		res = -errno;
+	}
+
+	res = p->cio.code;
+OUT:
+	return res;
 }
 
 int ex_set_remote(int ep, int lyr, void *rbind, unsigned int bsize)

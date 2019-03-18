@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <time.h>
 #include <stdint.h>
+#include <fcntl.h>
 
 #define DAEMON_PORT 11017
 
@@ -53,17 +54,6 @@ struct proto_info {
 	//struct netdev_ops *exlay_ops;
 };
 
-/* exlay_hdr: packet header for communication between 
- * exlay cli and exlay daemon
- * */
-struct exlay_hdr {
-	uint8_t cmd;
-	uint8_t code;
-	uint16_t len_proto_name; /* or len. of protocol list in the case of CMD_LIST */
-	uint16_t len_proto_path; /* or info. of a protocol in the case of CMD_INFO */
-	uint16_t reserved;
-};
-
 /*
  * MAX data size of exlay payload from daemon to cli in each cmd
  *
@@ -97,11 +87,18 @@ struct exlay_hdr {
 #define CODE_EDLOPEN 0x0b
 #define CODE_EDLSHM 0x0c
 #define CODE_EDIFFBS 0x0d
+#define CODE_EMKFIFO 0x0e
 #define CODE_EBIND 0x0f
 #define CODE_NG  0xff
 
 #define NR_CMDS 6
-#define NR_DAEM_CMDS 5
+
+//#define FILE_MODE (S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH)
+#define FILE_MODE 0777
+#define RDPATHPREFIX "/tmp/r_"
+#define WRPATHPREFIX "/tmp/w_"
+
+#define MAX_PATHLEN 16
 
 int ex_create_stack(unsigned int nr_layer);
 int ex_set_binding(
@@ -120,7 +117,4 @@ int ex_recv_stack(int ep, void *buf, uint32_t size, int opt);
 int ex_close_stack(int ep);
 
 #define RPCSERVER "127.0.0.1" 
-#define MAXPAYLSIZE ( ((MAXPROTNAMELEN * MAXNRPROT) > (MAXPROTNAMELEN + MAXBUFLEN)) ? \
-		(MAXPROTNAMELEN * MAXNRPROT) : (MAXPROTNAMELEN + MAXBUFLEN) )
-
 #endif

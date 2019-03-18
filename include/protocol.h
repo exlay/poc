@@ -47,6 +47,8 @@ struct exlay_layer {
  * identify the exlay endpoint.
  * e.g., MAC, IP addr, Port, others...*/
 struct binding_tree {
+	int app_r;
+	int app_w;
 	uint8_t layer;
 	struct exlay_layer *entry;
 	struct protobj *protob;

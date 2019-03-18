@@ -18,6 +18,7 @@
 #include <sys/ioctl.h>
 #include <rpc/pmap_clnt.h>
 #include <net/ethernet.h>
+#include <sys/stat.h>
 
 #include "exlay.h"
 #include "protocol.h"
@@ -144,7 +145,7 @@ static char *get_libpath(char *proto)
 	return ret;
 }
 
-static int reflect_to_binding_tree(struct exlay_ep *exep)
+static int reflect_to_binding_tree(struct exlay_ep *exep, cli_io *cio)
 {
 	int i;
 	int result = 0;
@@ -189,7 +190,42 @@ static int reflect_to_binding_tree(struct exlay_ep *exep)
 		bt = prt;
 	}
 	exep->topb = bt;
-	return result;
+
+	char str_ep[MAX_PATHLEN - strlen(RDPATHPREFIX)];
+	memset(str_ep, 0, sizeof(str_ep));
+	sprintf(str_ep, "%d", exep->ep);
+
+	/* create read & write fifos for transfer message */
+	strncat(cio->rpath, RDPATHPREFIX, strlen(RDPATHPREFIX));
+	strncat(cio->rpath, str_ep, strlen(str_ep));
+	if (mkfifo(cio->rpath, FILE_MODE) < 0) {
+		perror("mkfifo");
+		cio->code = -CODE_EMKFIFO;
+		goto OUT;
+	}
+	bt->app_r = open(cio->rpath, O_RDWR);
+	if (bt->app_r < 0) {
+		perror("open");
+		cio->code = -errno;
+		goto OUT;
+	}
+	strncat(cio->wpath, WRPATHPREFIX, strlen(WRPATHPREFIX));
+	strncat(cio->wpath, str_ep, strlen(str_ep));
+	if (mkfifo(cio->wpath, FILE_MODE) < 0) {
+		perror("mkfifo");
+		cio->code = -CODE_EMKFIFO;
+		goto OUT;
+	}
+	bt->app_w = open(cio->wpath, O_RDWR);
+	if (bt->app_w < 0) {
+		perror("open");
+		cio->code = -errno;
+		goto OUT;
+	}
+	cio->code = result;
+
+OUT:
+	return cio->code;
 }
 static int init_exlay(void)
 {
@@ -399,18 +435,33 @@ OUT:
 
 }
 
-int *ex_bind_stack_1_svc(int exsock, struct svc_req *rqstp)
+cli_io *ex_bind_stack_1_svc(int exsock, struct svc_req *rqstp)
 {
-	static int result = 0;
+	static cli_io result;
+	static char is_freeable = 0;
+
+	if (is_freeable) {
+		free(result.rpath);
+		free(result.wpath);
+		is_freeable = 0;
+	} 
+	result.code = 0;
+	result.rpath = (char *)malloc(MAX_PATHLEN);
+	memset(result.rpath, 0, MAX_PATHLEN);
+	result.wpath = (char *)malloc(MAX_PATHLEN);
+	memset(result.wpath, 0, MAX_PATHLEN);
+	is_freeable = 1;
+	
 	struct exlay_ep *exep;
 	exep = get_ep_from_sock(exsock);
 	if (exep == NULL) {
 		/* no such endpoint */
-		result = -CODE_NEXEP;
+		result.code = -CODE_NEXEP;
 		goto OUT;
 	}
 	/* reflect stack to binding_tree */
-	result = reflect_to_binding_tree(exep);
+	int ret;
+	ret = reflect_to_binding_tree(exep, &result);
 
 OUT:
 	return &result;
@@ -525,8 +576,20 @@ int *ex_recv_stack_1_svc(int ep, msg buf, int opt, struct svc_req *rqstp)
 {
 	static int result;
 	result = 0;
-	//debug_printf("msg: %s\n", buf.msg_val);
-	result = buf.msg_len;
+
+	struct exlay_ep *p;
+	uint32_t total_hdr_size;
+	p = get_ep_from_sock(ep);
+	if (p == NULL) {
+		/* no such exlay endpoint */
+		result = -CODE_NEXEP;
+		goto OUT;
+	}
+	struct exdata exd;
+	total_hdr_size = reqired_bufsize(p);
+	exd.data = (uint8_t *)malloc(total_hdr_size + buf.msg_len);
+	
+OUT:
 	return &result;
 }
 
