@@ -46,6 +46,11 @@ INCLUDE = $(addprefix -I,$(INCDIR))
 LIB = $(LIBDIR)/libexlay.so $(LIBDIR)/libproto.so
 PLIBDIR = $(CURDIR)/protocols/lib
 
+CONF_LIBPATHS = $(wildcard $(PLIBDIR)/*.so)
+CONF_LIBNAMES = $(notdir $(basename $(CONF_LIBPATHS)))
+CONF_TMP = $(addsuffix "\t",$(CONF_LIBNAMES))
+CONF_PAIRS = $(join $(CONF_TMP), $(CONF_LIBPATHS))
+
 SRCFS = $(notdir $(SRCS))
 OBJFS = $(SRCFS:%.c=%.o)
 DEPFS = $(SRCFS:%.c=%.d)
@@ -90,6 +95,11 @@ $(SRCDIR)/%_clnt.c: $(SRCDIR)/%.x
 
 $(SRCDIR)/%_xdr.c: $(SRCDIR)/%.x
 	cd $(SRCDIR) && rpcgen -Nc $(notdir $<) > ../$@
+
+config: exlay.conf
+	@echo $(CONF_PAIRS) | xargs -n2 > $<
+
+
 
 tag:
 	ctags -R

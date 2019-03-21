@@ -24,6 +24,7 @@ static int test_ethernet_in(struct exdata *exd, uint32_t datalen)
 	exd->d_rbind = eh->dstmac;
 	exd->d_lbind = eh->srcmac;
 	exd->d_upper = (uint8_t *)&eh->type;
+	exd->bind_s = MACADDRLEN;
 	exd->nxt_hdr = (uint8_t *)(exd->data + ETH_HDR_LEN);
 
 	return exd_in(exd, datalen);

@@ -36,6 +36,7 @@ static int prot_ctr = 0;
 static int list_len = 0;
 static unsigned char exsock = 0;
 pthread_t tid;
+pthread_mutex_t bt_lock = PTHREAD_MUTEX_INITIALIZER;
 
 struct proto_info prinfo_head;
 struct binding_tree root;
@@ -74,21 +75,6 @@ void term(int sig)
 	exit(EXIT_SUCCESS);
 }
 
-int goto_next_binding(struct exdata *exd, uint32_t len)
-{
-
-}
-
-int goto_next_proto(struct exdata *exd, uint32_t len)
-{
-
-}
-
-int goto_next_layer(struct exdata *exd, uint32_t len)
-{
-	
-}
-
 void *recv_packet(void *arg)
 {
 	struct exdata exd;
@@ -111,33 +97,21 @@ void *recv_packet(void *arg)
 			 * would like to support other DataLink layer protocol such
 			 * as BLE and WiFi.
 			 * */
+			pthread_mutex_lock(&bt_lock);
 			exd.cur = root.uplyr->fp;
-
 			root.uplyr->fp->protob->d_input(&exd, (uint32_t)ret);
+			pthread_mutex_unlock(&bt_lock);
 		}
 	}
 }
 
-static int bind_cmp(uint8_t *b1, uint8_t *b2, uint32_t bsize)
-{
-	int result = 0;
-	uint32_t i;
-	for (i = 0; i < bsize; i++) {
-		if (b1[i] != b2[i]) {
-			/* b1 and d2 are different */
-			result = 1;
-			break;
-		}
-	}
-	return result;
-}
 
 static struct binding_tree *add_protocol_to(
 		struct exlay_layer *lyr,
 		struct binding_tree *lyr_root)
 {
 	struct binding_tree *prt;
-	/* guaranteed that prt_root is not NULL */
+	/* guaranteed that lyr_root is not NULL */
 	
 	prt = malloc(sizeof(struct binding_tree));
 	memset(prt, 0, sizeof(struct binding_tree));
@@ -193,6 +167,9 @@ static struct binding_tree *add_binding_to(
 	ent->fbind = prt_root->fbind;
 	ent->layer = lyr->layer;
 	ent->lolyr = prt_root->lolyr;
+	ent->upper = lyr->upper;
+
+	/* add this binding in the protocol */
 	prt_root->fbind = ent;
 
 OUT:
@@ -205,9 +182,11 @@ static struct binding_tree *find_binding_in(
 {
 	struct binding_tree *p;
 	unsigned int bsize = ent->protob->bind_size;
+	unsigned int upsize = ent->protob->upper_type_size;
 
 	for (p = prt_root->fbind; p != NULL; p = p->fbind) {
-		if (bind_cmp(p->entry->lbind, ent->lbind, bsize) == 0) {
+		if (bind_cmp(p->entry->lbind, ent->lbind, bsize) == 0 &&
+				upper_cmp(p->entry->upper, ent->upper, upsize) == 0) {
 			return p;
 		}
 	}
@@ -238,14 +217,16 @@ static int reflect_to_binding_tree(struct exlay_ep *exep, cli_io *cio)
 	struct binding_tree *bt; /* point to exlay binding tree structure
 							  *	from the root to the leaf */
 	struct binding_tree *prt;
+	struct binding_tree *prt2;
 							  
 	/* 0. n=1 から初めて u_lyr が定義されたスタックを超えたら終わる
 	 * 1. 第n階層に，使用する bindig が存在するか
-	 * 2. ある → そのノードの upper を取り出す → n++ して 1 へ
+	 * 2. ある → そのノードの uplyr を取り出す → n++ して 1 へ
 	 *    ない → n 階層目に新たなノードを作成して最上位まで upper で辿れるようにして終了 */
 	for (i = 0, bt = &root; i < exep->nr_layers; i++) {
 		u_lyr = &exep->btm[i];
-		if ((prt = find_protocol_in(u_lyr, bt->uplyr)) == NULL) {
+		prt = find_protocol_in(u_lyr, bt->uplyr);
+		if (prt == NULL) {
 			/* not found, the protocol can be added. */
 			if (bt->uplyr == NULL) {
 				/* there are no upper protocols */
@@ -260,9 +241,9 @@ static int reflect_to_binding_tree(struct exlay_ep *exep, cli_io *cio)
 				bt->uplyr = lyr_root;
 				lyr_root->lolyr = bt;
 			}
-			prt = add_protocol_to(u_lyr, bt->uplyr);
-			prt = add_binding_to(u_lyr, prt);
-		} else if ((prt = find_binding_in(u_lyr, prt)) == NULL) {
+			prt2 = add_protocol_to(u_lyr, bt->uplyr);
+			prt = add_binding_to(u_lyr, prt2);
+		} else if ((prt2 = find_binding_in(u_lyr, prt)) == NULL) {
 			/* u_lyr binding is not found in the bt layer */
 			prt = add_binding_to(u_lyr, prt);
 		} else if (i == exep->nr_layers - 1) {
@@ -315,6 +296,61 @@ OUT:
 static int init_exlay(void)
 {
 	memset(&root, 0, sizeof(struct binding_tree));
+	prinfo_head.fp = &prinfo_head;
+	prinfo_head.bp = &prinfo_head;
+
+	char *err;
+	char *name;
+	char *path;
+	FILE *fp;
+	char *p;
+	char buf[MAX_CFG_LINELEN] = {0};
+	int line = 0;
+	fp = fopen(CONFIG_FILE, "r");
+	if (fp == NULL) {
+		perror("fopen: init_exlay");
+		exit(errno);
+	}
+
+	while (fgets(buf, MAX_CFG_LINELEN, fp) != NULL) {
+		line++;
+		if (buf[strlen(buf)] == MAX_CFG_LINELEN-1 && buf[strlen(buf)] != '\n') {
+			fprintf(stderr, "protocol name or path is too long: line %d\n", line);
+			fclose(fp);
+			exit(EXIT_FAILURE);
+		}
+
+		int i;
+		name = &buf[3];
+		for (i = 0; i < strlen(buf); i++) {
+			if (buf[i] == ' ') {
+				buf[i] = '\0';
+				path = &buf[i+1];
+				path[strlen(path)-1] = '\0';
+				break;
+			}
+		}
+
+		struct proto_info *new_prt;
+		new_prt = (struct proto_info *)malloc(sizeof(struct proto_info));
+		new_prt->path = malloc(strlen(path));
+		memcpy(new_prt->path, path, strlen(path));
+		new_prt->name = malloc(strlen(name));
+		memcpy(new_prt->name, name, strlen(name));
+
+		dlopen(new_prt->path, RTLD_LAZY|RTLD_GLOBAL);
+		if ((err = dlerror()) != NULL) {
+			fputs(err, stderr);
+			putchar('\n');
+			exit(EXIT_FAILURE);
+		}
+		INSERT_TO_LIST_HEAD(&prinfo_head, new_prt);
+		debug_printf("prot %s (%s) was successfully added\n", 
+				new_prt->name, new_prt->path);
+		prot_ctr++;
+		list_len += (strlen(name) + 1);
+
+	}
 	return 0;
 }
 
@@ -385,7 +421,6 @@ int init_daemon(char *ifname)
 		return errno;
 	}
 
-	prinfo_head.fp = &prinfo_head;
 
 	return 0;
 }
@@ -555,7 +590,9 @@ cli_io *ex_bind_stack_1_svc(int exsock, struct svc_req *rqstp)
 	}
 	/* reflect stack to binding_tree */
 	int ret;
+	pthread_mutex_lock(&bt_lock);
 	ret = reflect_to_binding_tree(exep, &result);
+	pthread_mutex_unlock(&bt_lock);
 
 OUT:
 	return &result;

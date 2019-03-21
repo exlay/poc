@@ -10,8 +10,10 @@
 
 #ifdef DEBUG
 #define debug_printf(fmt, ...) fprintf(stderr, "%s(%d)debug: " fmt, __func__, __LINE__, ## __VA_ARGS__)
+#define debug_printf2(fmt, ...) fprintf(stderr, fmt, ## __VA_ARGS__)
 #else
 #define debug_printf(fmt, ...)
+#define debug_printf2(fmt, ...)
 #endif
 
 #define INSERT_TO_LIST_HEAD(h, p) \
@@ -99,6 +101,9 @@ struct proto_info {
 #define WRPATHPREFIX "/tmp/w_"
 
 #define MAX_PATHLEN 16
+
+#define CONFIG_FILE "./exlay.conf"
+#define MAX_CFG_LINELEN 512
 
 int ex_create_stack(unsigned int nr_layer);
 int ex_set_binding(

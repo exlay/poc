@@ -75,3 +75,5 @@ extern uint8_t *exd_get_rbind(struct exdata *exd, uint32_t *size);
 extern uint8_t *exd_get_upper(struct exdata *exd, uint32_t *size);
 extern int exd_out(struct exdata *exd, uint32_t len);
 extern int exd_in(struct exdata *exd, uint32_t len);
+extern int bind_cmp(uint8_t *b1, uint8_t *b2, uint32_t bsize);
+extern int upper_cmp(uint8_t *u1, uint8_t *u2, uint32_t upsize);

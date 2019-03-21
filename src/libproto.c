@@ -43,6 +43,48 @@ int exd_out(struct exdata *exd, uint32_t len)
 	return result;
 }
 
+int upper_cmp(uint8_t *u1, uint8_t *u2, uint32_t upsize)
+{
+	int result = 0;
+	if (u1 == u2 && u1 == NULL) {
+		result = 0;
+		goto OUT;
+	}
+
+	if (u1 != NULL && u2 != NULL) {
+		result = memcmp(u1, u2, upsize);
+		if (upsize == 0) {
+			result = 1;
+		}
+	} else {
+		result = 1;
+	}
+
+OUT:
+	return result;
+}
+
+int bind_cmp(uint8_t *b1, uint8_t *b2, uint32_t bsize)
+{
+	int result = 0;
+	if (b1 == b2 && b1 == NULL) {
+		result = 0;
+		goto OUT;
+	}
+
+	if (b1 != NULL && b2 != NULL) {
+		result = memcmp(b1, b2, bsize);
+		if (bsize == 0) {
+			result = 1;
+		}
+	} else {
+		result = 1;
+	}
+
+OUT:
+	return result;
+}
+
 int exd_in(struct exdata *exd, uint32_t len)
 {
 	int result = EXIT_FAILURE;
@@ -51,9 +93,10 @@ int exd_in(struct exdata *exd, uint32_t len)
 	 * exd->cur->fbind から，取得した binding に該当するものを探す
 	 * */
 	struct binding_tree *cb; /* ptr to search the current binding  */
-	struct binding_tree *nxt_prot = NULL;
+	int ret;
 	for (cb = exd->cur->fbind; cb != NULL; cb = cb->fbind) {
-		if (memcmp(cb->entry->lbind, exd->d_rbind, exd->bind_s) == 0) {
+		if ((ret = bind_cmp(cb->entry->lbind, exd->d_rbind, exd->bind_s)) == 0 &&
+				(ret = upper_cmp(cb->entry->upper, exd->d_upper, exd->upper_s)) == 0) {
 			/* the binding found */
 			/* whether reaching the top of the stack or not */
 			if (cb->is_top) {
@@ -68,28 +111,25 @@ int exd_in(struct exdata *exd, uint32_t len)
 			 * not the top of the layer 
 			 */
 
-		    /* get the upper layer protocol root */
-			nxt_prot = cb->uplyr;
-
-			/* search the next protocol by checking upper type */
-			/* ptr to search the current next protocol by upper */
-			struct binding_tree *np; 
-			for (np = nxt_prot->fp; np != NULL; np = np->fp) {
-				if (exd->d_upper == NULL) {
-					/* upper protocol should be specified by d_rbind */
-					exd->d_lbind;
-				} else if (memcmp(np->upper, exd->d_upper, exd->upper_s) == 0) {
-					/* found the next protocol */
-					np->protob->d_input(exd, len);
-				}
-			}
+			/* found the next protocol */
+			int ret;
+			ret = cb->uplyr->fp->protob->d_input(exd, len);
+			return ret;
 		}
 	}
 
 	/* no such protocol or binding */
-	debug_printf("pkt drop in %s in layer %d\n", 
+	debug_printf2("===== pkt drop in %s in layer %d =====\n", 
 			exd->cur->protob->name,
 			exd->cur->layer);
+	unsigned int i;
+	for (i = 0; i < exd->datalen; i++) {
+		if ((i % 16) == 0 && i != 0) {
+			debug_printf2("\n");
+		}
+		debug_printf2("%02X ", exd->data[i]);
+	}
+	debug_printf2("\n===============================================\n");
 
 	return result;
 }
