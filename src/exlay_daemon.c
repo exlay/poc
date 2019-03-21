@@ -19,6 +19,7 @@
 #include <rpc/pmap_clnt.h>
 #include <net/ethernet.h>
 #include <sys/stat.h>
+#include <pthread.h>
 
 #include "exlay.h"
 #include "protocol.h"
@@ -34,15 +35,88 @@ int daem_sock;
 static int prot_ctr = 0;
 static int list_len = 0;
 static unsigned char exsock = 0;
+pthread_t tid;
 
 struct proto_info prinfo_head;
 struct binding_tree root;
-
 
 struct exlay_ep ep_head = {
 	.fp = &ep_head,
 	.bp = &ep_head,
 };
+
+void stop_routine(void)
+{
+	pthread_cancel(tid);
+	int i;
+	char rpath[MAX_PATHLEN] = {0};
+	char wpath[MAX_PATHLEN] = {0};
+	strncat(rpath, RDPATHPREFIX, strlen(RDPATHPREFIX));
+	strncat(wpath, WRPATHPREFIX, strlen(WRPATHPREFIX));
+	for (i = 0; i <= UINT8_MAX; i++) {
+		sprintf(rpath + strlen(RDPATHPREFIX), "%d", i);
+		sprintf(wpath + strlen(WRPATHPREFIX), "%d", i);
+		if (unlink(rpath) == 0) {
+			debug_printf("unlink %s\n", rpath);
+		}
+		if (unlink(wpath) == 0) {
+			debug_printf("unlink %s\n", wpath);
+		}
+	}
+	return;
+}
+
+void term(int sig)
+{
+	printf("stop daemon...\n");
+	stop_routine();
+	printf("done.\n");
+	exit(EXIT_SUCCESS);
+}
+
+int goto_next_binding(struct exdata *exd, uint32_t len)
+{
+
+}
+
+int goto_next_proto(struct exdata *exd, uint32_t len)
+{
+
+}
+
+int goto_next_layer(struct exdata *exd, uint32_t len)
+{
+	
+}
+
+void *recv_packet(void *arg)
+{
+	struct exdata exd;
+	exd.data = malloc(2048);
+	uint8_t buf[2048];
+	int ret;
+	while (1) {
+		memset(buf, 0, sizeof(buf));
+		ret = read(daem_sock, buf, sizeof(buf));
+		if (ret < 0) {
+			perror("recv_packet: read:");
+		} else if (root.uplyr != NULL){
+			/* go to exlay stack from the buttom */
+			memcpy(exd.data, buf, ret);
+			exd.datalen = ret;
+			exd.nxt_hdr = exd.data;
+			exd.sock = -1;
+
+			/* only Ethenet is available.
+			 * would like to support other DataLink layer protocol such
+			 * as BLE and WiFi.
+			 * */
+			exd.cur = root.uplyr->fp;
+
+			root.uplyr->fp->protob->d_input(&exd, (uint32_t)ret);
+		}
+	}
+}
 
 static int bind_cmp(uint8_t *b1, uint8_t *b2, uint32_t bsize)
 {
@@ -69,9 +143,18 @@ static struct binding_tree *add_protocol_to(
 	memset(prt, 0, sizeof(struct binding_tree));
 	prt->protob = lyr->protob;
 	prt->layer = lyr->layer;
-	prt->lower = lyr_root->lower;
+	prt->lolyr = lyr_root->lolyr;
+
+	/* set upper type */
+	if (prt->upper != NULL) {
+		prt->upper = malloc(lyr->protob->upper_type_size);
+		memcpy(prt->upper, lyr->upper, lyr->protob->upper_type_size);
+	}
+
+	/* insert the protocol to the layer list */
 	prt->fp = lyr_root->fp;
 	lyr_root->fp = prt;
+
 	return prt;
 }
 
@@ -109,7 +192,7 @@ static struct binding_tree *add_binding_to(
 	ent->entry = lyr;
 	ent->fbind = prt_root->fbind;
 	ent->layer = lyr->layer;
-	ent->lower = prt_root->lower;
+	ent->lolyr = prt_root->lolyr;
 	prt_root->fbind = ent;
 
 OUT:
@@ -162,9 +245,9 @@ static int reflect_to_binding_tree(struct exlay_ep *exep, cli_io *cio)
 	 *    ない → n 階層目に新たなノードを作成して最上位まで upper で辿れるようにして終了 */
 	for (i = 0, bt = &root; i < exep->nr_layers; i++) {
 		u_lyr = &exep->btm[i];
-		if ((prt = find_protocol_in(u_lyr, bt->upper)) == NULL) {
+		if ((prt = find_protocol_in(u_lyr, bt->uplyr)) == NULL) {
 			/* not found, the protocol can be added. */
-			if (bt->upper == NULL) {
+			if (bt->uplyr == NULL) {
 				/* there are no upper protocols */
 				struct binding_tree *lyr_root;
 				lyr_root = (struct binding_tree *)malloc(sizeof(struct binding_tree));
@@ -174,10 +257,10 @@ static int reflect_to_binding_tree(struct exlay_ep *exep, cli_io *cio)
 				}
 				memset(lyr_root, 0, sizeof(struct binding_tree));
 				lyr_root->layer = i + 1;
-				bt->upper = lyr_root;
-				lyr_root->lower = bt;
+				bt->uplyr = lyr_root;
+				lyr_root->lolyr = bt;
 			}
-			prt = add_protocol_to(u_lyr, bt->upper);
+			prt = add_protocol_to(u_lyr, bt->uplyr);
 			prt = add_binding_to(u_lyr, prt);
 		} else if ((prt = find_binding_in(u_lyr, prt)) == NULL) {
 			/* u_lyr binding is not found in the bt layer */
@@ -186,10 +269,12 @@ static int reflect_to_binding_tree(struct exlay_ep *exep, cli_io *cio)
 			/* all requested bindings have already exist
 			 * return error value */
 			result = -CODE_EBIND;
-		}
+		} 
 		bt = prt;
 	}
+
 	exep->topb = bt;
+	bt->is_top = 1;
 
 	char str_ep[MAX_PATHLEN - strlen(RDPATHPREFIX)];
 	memset(str_ep, 0, sizeof(str_ep));
@@ -225,7 +310,7 @@ static int reflect_to_binding_tree(struct exlay_ep *exep, cli_io *cio)
 	cio->code = result;
 
 OUT:
-	return cio->code;
+	return result;
 }
 static int init_exlay(void)
 {
@@ -330,6 +415,15 @@ int main(int argc, char **argv)
 		fprintf (stderr, "%s", "unable to register (EXLAYPROG, EXLAYVERS, udp).");
 		exit(1);
 	}
+
+	pthread_attr_t attr;
+
+	signal(SIGPIPE, SIG_IGN);
+	signal(SIGTERM, term);
+	signal(SIGINT, term);
+	signal(SIGQUIT, term);
+	pthread_attr_init(&attr);
+	pthread_create(&tid,&attr, recv_packet, NULL);
 
 	svc_run();
 	fprintf (stderr, "%s", "svc_run returned");

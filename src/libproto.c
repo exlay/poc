@@ -21,17 +21,18 @@
 #include "exlay.h"
 #include "exlay/error.h"
 
+
 int exd_out(struct exdata *exd, uint32_t len)
 {
 	int result = EXIT_FAILURE;
 	/* set the current layer down */
-	exd->cur = exd->cur->lower;
+	exd->cur = exd->cur->lolyr;
 	if (exd->cur == NULL) {
 		fprintf(stderr, "exd_out: invalid layer\n");
 		return -1;
 	}
 
-	if (exd->cur->lower == NULL) {
+	if (exd->cur->lolyr == NULL) {
 		/* reach the buttom of this stack */
 		result = write(exd->sock, exd->data, len);
 	} else {
@@ -44,7 +45,53 @@ int exd_out(struct exdata *exd, uint32_t len)
 
 int exd_in(struct exdata *exd, uint32_t len)
 {
-	return len;
+	int result = EXIT_FAILURE;
+	/*
+	 * 受信したパケットから，rbind と upper_type を取得
+	 * exd->cur->fbind から，取得した binding に該当するものを探す
+	 * */
+	struct binding_tree *cb; /* ptr to search the current binding  */
+	struct binding_tree *nxt_prot = NULL;
+	for (cb = exd->cur->fbind; cb != NULL; cb = cb->fbind) {
+		if (memcmp(cb->entry->lbind, exd->d_rbind, exd->bind_s) == 0) {
+			/* the binding found */
+			/* whether reaching the top of the stack or not */
+			if (cb->is_top) {
+				int ret;
+				ret = write(cb->app_r, exd->data, exd->datalen);
+				if (ret < 0) {
+					perror("write: exd_in");
+				}
+			}
+
+			/* 
+			 * not the top of the layer 
+			 */
+
+		    /* get the upper layer protocol root */
+			nxt_prot = cb->uplyr;
+
+			/* search the next protocol by checking upper type */
+			/* ptr to search the current next protocol by upper */
+			struct binding_tree *np; 
+			for (np = nxt_prot->fp; np != NULL; np = np->fp) {
+				if (exd->d_upper == NULL) {
+					/* upper protocol should be specified by d_rbind */
+					exd->d_lbind;
+				} else if (memcmp(np->upper, exd->d_upper, exd->upper_s) == 0) {
+					/* found the next protocol */
+					np->protob->d_input(exd, len);
+				}
+			}
+		}
+	}
+
+	/* no such protocol or binding */
+	debug_printf("pkt drop in %s in layer %d\n", 
+			exd->cur->protob->name,
+			exd->cur->layer);
+
+	return result;
 }
 
 /* intput: exd

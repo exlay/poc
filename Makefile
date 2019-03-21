@@ -69,7 +69,7 @@ $(EXLAYCLI): $(CLIOBJS)
 
 $(EXLAYDAEMON): $(DAEMONOBJS)
 	if [ ! -d "$(BINDIR)" ]; then mkdir $(BINDIR); fi
-	$(CC) $(CFLAGS) $(LIBRARY) -o $@ $^ $(LDFLAGS) -lproto
+	$(CC) $(CFLAGS) $(LIBRARY) -o $@ $^ $(LDFLAGS) -lproto -pthread
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
 	if [ ! -d "$(OBJDIR)" ]; then mkdir $(OBJDIR); fi

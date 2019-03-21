@@ -32,40 +32,42 @@ int main(void)
 	
 	es1 = ex_create_stack(1);
 	assert(es1 > 0);
-	ret = ex_set_binding(es1, 1, "test_ethernet", mac, 6, 0);
+	ret = ex_set_binding(es1, 1, "test_ethernet", mac, 6, htons(0x88b5));
 	assert(ret == 0);
 	ret = ex_set_remote(es1, 1, dstmac, 6);
 	assert(ret == 0);
 	ret = ex_bind_stack(es1);
 	assert(ret == 0);
 
-	es2 = ex_create_stack(2);
+	es2 = ex_create_stack(3);
 	assert(es2 > 0);
-	ret = ex_set_binding(es2, 1, "test_ethernet", mac, 6, ETHTYPE_ARP);
+	ret = ex_set_binding(es2, 1, "test_ethernet", mac, 6, htons(ETHTYPE_ARP));
 	assert(ret == 0);
-	ret = ex_set_binding(es2, 2, "test_arp", mac, 6, 0);
+	ret = ex_set_binding(es2, 2, "test_arp", NULL, 0, 0);
+	assert(ret == 0);
+	ret = ex_set_binding(es2, 3, "test_ipv4", &srcip, 4, htons(253));
 	assert(ret == 0);
 	ret = ex_bind_stack(es2);
 	assert(ret == 0);
 		
 	es3 = ex_create_stack(2);
 	assert(es2 > 0);
-	ret = ex_set_binding(es3, 1, "test_ethernet", mac, 6, ETHTYPE_IP4);
+	ret = ex_set_binding(es3, 1, "test_ethernet", mac, 6, htons(ETHTYPE_IP4));
 	assert(ret == 0);
-	ret = ex_set_binding(es3, 2, "test_ipv4", &srcip, 4, IPPROTO_ICMP);
+	ret = ex_set_binding(es3, 2, "test_ipv4", &srcip, 4, htons(IPPROTO_ICMP));
 	assert(ret == 0);
 	ret = ex_bind_stack(es3);
 	assert(ret == 0);
 
 	es4 = ex_create_stack(4);
 	assert(es2 > 0);
-	ret = ex_set_binding(es4, 1, "test_ethernet", mac, 6, ETHTYPE_IP4);
+	ret = ex_set_binding(es4, 1, "test_ethernet", mac, 6, htons(ETHTYPE_IP4));
 	assert(ret == 0);
-	ret = ex_set_binding(es4, 2, "test_ipv4", &srcip, 4, 97);
+	ret = ex_set_binding(es4, 2, "test_ipv4", &srcip, 4, htons(97));
 	assert(ret == 0);
-	ret = ex_set_binding(es4, 3, "test_ethernet", mac, 6, ETHTYPE_IP4);
+	ret = ex_set_binding(es4, 3, "test_ethernet", mac, 6, htons(ETHTYPE_IP4));
 	assert(ret == 0);
-	ret = ex_set_binding(es4, 4, "test_ipv4", &srcip, 4, IPPROTO_ICMP);
+	ret = ex_set_binding(es4, 4, "test_ipv4", &srcip, 4, htons(IPPROTO_ICMP));
 	assert(ret == 0);
 	ret = ex_bind_stack(es4);
 	assert(ret == 0);

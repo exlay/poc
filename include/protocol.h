@@ -7,6 +7,15 @@ struct exdata {
 	uint8_t *data;
 	uint32_t datalen;
 	uint8_t *nxt_hdr;
+	
+	uint8_t *d_lbind; /* pointer to the lbind field of each protocol */
+	uint8_t *d_rbind; /* pointer to the rbind firld of each protocol */
+	uint8_t *d_upper; /* pointer to the upper firld of each protocol */
+	uint32_t bind_s; /* binding size of each protocol */
+	uint32_t upper_s; /* upper type size of each protocol */
+
+	uint8_t *a_lbind; /* automatic local bind */
+	uint8_t *a_rbind; /* automatic remote bind */
 	struct binding_tree *cur;
 };
 
@@ -49,11 +58,13 @@ struct exlay_layer {
 struct binding_tree {
 	int app_r;
 	int app_w;
+	uint8_t is_top;
 	uint8_t layer;
 	struct exlay_layer *entry;
 	struct protobj *protob;
-	struct binding_tree *upper; /* point to the upper layer */
-	struct binding_tree *lower; /* point to the lower layer */
+	uint8_t *upper;
+	struct binding_tree *uplyr; /* point to the upper layer */
+	struct binding_tree *lolyr; /* point to the lower layer */
 	struct binding_tree *fp; /* point to the next protocol in this layer */
 	struct binding_tree *fbind; /* point to the next bind */
 };

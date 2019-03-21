@@ -17,6 +17,7 @@ int main(void)
 	int ret;
 	uint8_t mac[6] = {0x5e, 0xa6, 0x27, 0x62, 0x5f, 0x9c};
 	uint8_t dstmac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+	uint8_t buf[100];
 
 	exsock = ex_create_stack(1);
 	assert(exsock > 0);
@@ -29,11 +30,12 @@ int main(void)
 	ret = ex_dial_stack(exsock);
 	assert(ret == 0);
 	ret = ex_send_stack(exsock, STRING, strlen(STRING), 0);
-	//assert(ret >= 0);
-	//ret = ex_recv_stack(exsock, STRING, strlen(STRING), 0);
-	//assert(ret >= 0);
-	//ret = ex_close_stack(exsock);
-	//assert(ret == 0);
+	assert(ret >= 0);
+	while (1) {
+		memset(buf, 0, sizeof(buf));
+		ret = ex_recv_stack(exsock, buf, strlen(STRING), 0);
+		printf("recv: %s (%d byte))", buf, ret);
+	}
 
 
 	return 0;

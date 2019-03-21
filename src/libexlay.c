@@ -204,7 +204,18 @@ int ex_send_stack(int ep, void *buf, uint32_t size, int opt)
 
 int ex_recv_stack(int ep, void *buf, uint32_t size, int opt)
 {
-	return 0;
+	int res = 0;
+	struct cli_ios *p;
+	p = get_cli_from_ep(ep);
+	if (p == NULL) {
+		fprintf(stderr, "no soch exlay endpoint\n");
+		res = -CODE_NEXIST;
+		goto OUT;
+	}
+	res = read(p->rd, buf, size);
+
+OUT:
+	return res;
 }
 
 int ex_close_stack(int ep)
