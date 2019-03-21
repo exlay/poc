@@ -112,7 +112,8 @@ int ex_set_binding(
 		char *proto, 
 		void *lbind,
 		unsigned int bsize, /* binding size */
-		int upper);
+		void *upper, /* binding size */
+		unsigned int upper_s);
 int ex_bind_stack(int ep);
 int ex_set_remote(int ep, int layer, void *binding, unsigned int bsize);
 int ex_dial_stack(int ep);

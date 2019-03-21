@@ -1,4 +1,5 @@
 typedef opaque binding<16>;
+typedef opaque upper<16>;
 typedef opaque msg<5000>;
 
 struct cli_io {
@@ -10,7 +11,7 @@ struct cli_io {
 program EXLAYPROG {
 	version EXLAYVERS {
 		int EX_CREATE_STACK(unsigned int) = 1;
-		int EX_SET_BINDING(int, unsigned int, string, binding, unsigned int, int) = 2;
+		int EX_SET_BINDING(int, unsigned int, string, binding, upper) = 2;
 		cli_io EX_BIND_STACK(int) = 3;
 		int EX_SET_REMOTE(int, int, binding, unsigned int) = 4;
 		int EX_DIAL_STACK(int) = 5;

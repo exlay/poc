@@ -490,8 +490,7 @@ int *ex_set_binding_1_svc(
 		unsigned int lyr, 
 		char *proto, 
 		binding lbind, 
-		unsigned int bsize, 
-		int upper, 
+		upper upr, 
 		struct svc_req *rqstp)
 {
 	static int result;
@@ -540,7 +539,7 @@ int *ex_set_binding_1_svc(
 
 	/* set requested binding */
 	uint8_t size = exep->btm[lyr-1].protob->bind_size;
-	if (bsize != size && size != 0) {
+	if (lbind.binding_len != size && size != 0) {
 		/* specify different binding size between 
 		 * protocol library and user definion 
 		 * */
@@ -552,9 +551,11 @@ int *ex_set_binding_1_svc(
 	}
 
 	uint8_t uplyr_type_s = exep->btm[lyr-1].protob->upper_type_size;
-	if (upper != 0) {
+
+	if (upr.upper_len != 0) {
 		exep->btm[lyr-1].upper = malloc(uplyr_type_s);
-		memcpy(exep->btm[lyr-1].upper, &upper, uplyr_type_s);
+		memcpy(exep->btm[lyr-1].upper, upr.upper_val, uplyr_type_s); 
+
 	} else {
 		exep->btm[lyr-1].upper = NULL;
 	}

@@ -15,6 +15,8 @@
 #include <linux/if.h>
 #include <sys/ioctl.h>
 
+#define TYPE 0x88b5
+
 
 int main(int argc, char **argv)
 {
@@ -78,14 +80,14 @@ int main(int argc, char **argv)
 
 	struct ether_header eh;
 	uint8_t smac[6] = {0xa2,0x73,0x57,0x27,0xa7,0x14};
-#if 0
+#if 1
 	memcpy(eh.ether_shost, smac, 6);
 	memcpy(eh.ether_dhost, ifr2.ifr_hwaddr.sa_data, 6);
 #else
 	uint8_t dmac[6] = {0xff,0xff,0xff,0xff,0xff,0xff};
 	memcpy(eh.ether_dhost, dmac, 6);
 #endif
-	eh.ether_type = htons(0x88b5);
+	eh.ether_type = htons(TYPE); 
 	char data[100] = {0};
 	char *msg = "hello, world";
 
@@ -99,7 +101,9 @@ int main(int argc, char **argv)
 	printf("shost: %.2x:%.2x:%.2x:%.2x:%.2x:%.2x\n",
 			eh.ether_shost[0], eh.ether_shost[1], eh.ether_shost[2],
 			eh.ether_shost[3], eh.ether_shost[4], eh.ether_shost[5]);
-	printf("type: nw-order %.4x (host-oder %.4x)\n",  htons(eh.ether_type), ntohs(eh.ether_type));
+	printf("type: nw-order %.4x (host-oder %.4x)\n",  
+			htons(eh.ether_type), 
+			ntohs(eh.ether_type));
 
 
 	write(daem_sock, data, sizeof(data));

@@ -18,10 +18,10 @@ int main(void)
 	uint8_t mac[6] = {0x5e, 0xa6, 0x27, 0x62, 0x5f, 0x9c};
 	uint8_t dstmac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
 	uint8_t buf[100];
-
+	uint8_t type[2] = {0x88, 0xb5};
 	exsock = ex_create_stack(1);
 	assert(exsock > 0);
-	ret = ex_set_binding(exsock, 1, "test_ethernet", mac, 6, htons(0x88b5));
+	ret = ex_set_binding(exsock, 1, "test_ethernet", mac, 6, type, 2);
 	assert(ret == 0);
 	ret = ex_set_remote(exsock, 1, dstmac, 6);
 	assert(ret == 0);

@@ -99,8 +99,8 @@ int exd_in(struct exdata *exd, uint32_t len)
 				(ret = upper_cmp(cb->entry->upper, exd->d_upper, exd->upper_s)) == 0) {
 			/* the binding found */
 			/* whether reaching the top of the stack or not */
+			int ret;
 			if (cb->is_top) {
-				int ret;
 				ret = write(cb->app_r, exd->data, exd->datalen);
 				if (ret < 0) {
 					perror("write: exd_in");
@@ -111,8 +111,15 @@ int exd_in(struct exdata *exd, uint32_t len)
 			 * not the top of the layer 
 			 */
 
+			if (cb->is_top && cb->uplyr == NULL) {
+				debug_printf2("%s --> App\n", cb->entry->protob->name);
+				return ret;
+			}
+
 			/* found the next protocol */
-			int ret;
+			debug_printf2("%s --> %s", 
+					cb->protob->name, 
+					cb->uplyr->fp->protob->name);
 			ret = cb->uplyr->fp->protob->d_input(exd, len);
 			return ret;
 		}

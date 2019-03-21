@@ -98,13 +98,19 @@ int ex_set_binding(
 		char *proto, 
 		void *lbind,
 		unsigned int bsize,
-		int upper)
+		void *upr,
+		unsigned int upper_s)
 {
 	int *res;
 	binding b;
 	b.binding_len = bsize;
 	b.binding_val = (char *)lbind;
-	res = ex_set_binding_1(exsock, lyr, proto, b, bsize, upper, client);
+
+	upper up;
+	up.upper_len = upper_s;
+	up.upper_val = (char *)upr;
+
+	res = ex_set_binding_1(exsock, lyr, proto, b, up, client);
 	if (res == NULL) {
 		clnt_perror(client, RPCSERVER);
 		exit(EXIT_FAILURE);
