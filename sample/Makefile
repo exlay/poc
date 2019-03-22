@@ -9,7 +9,7 @@ BINDIR = ./bin
 INCDIRS = ../include
 LIBDIRS = $(CURDIR)/../lib
 
-TARGETS = ether_app bind_test shm_rtest fifo_test fifo_rtest write_ether
+TARGETS = ether_app bind_test shm_rtest fifo_rtest write_ether
 
 # User should add the name of the exlay application
 TARGETS += 

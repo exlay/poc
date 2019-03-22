@@ -85,7 +85,8 @@ int main(int argc, char **argv)
 	while (1) {
 		memset(buf, 0, sizeof(buf));
 		ret = ex_recv_stack(exsock, buf, 100, 0);
-		printf("recv: %s (%d byte))", buf, ret);
+		printf("recv: %s (%d byte)\n", buf, ret);
+		fflush(stdout);
 	}
 
 

@@ -101,7 +101,7 @@ int exd_in(struct exdata *exd, uint32_t len)
 			/* whether reaching the top of the stack or not */
 			int ret;
 			if (cb->is_top) {
-				ret = write(cb->app_r, exd->data, exd->datalen);
+				ret = write(cb->app_r, exd->nxt_hdr, exd->datalen);
 				if (ret < 0) {
 					perror("write: exd_in");
 				}

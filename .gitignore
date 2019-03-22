@@ -16,7 +16,7 @@ exlay_rpc_clnt.c
 exlay_rpc_svc.c
 exlay_rpc_xdr.c
 exlay_rpc.h
-
+./exlay.conf
 .gdbinit
 build/
 bin/
