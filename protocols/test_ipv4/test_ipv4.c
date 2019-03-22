@@ -4,7 +4,18 @@
 #include "protocol.h"
 
 static int test_ipv4_in(struct exdata *data, uint32_t msg_len) {
-
+	/* 1. header analyze */
+	/* 2. search routing table for dst IP */
+	/* 2.1 if the pacekt is routed to other hosts */
+	/* 2.1.1 decriment TTL */
+	/* 2.1.2 resolve option */
+	/* 2.1.3 search arptable for next host: send an event to ARP via arptable handler */
+	/* 2.1.3 set automatic {l,r}bind in exdata (i.e., smac and dmac ) */
+	/* 2.1.4 exd_out */
+	/* 2.2 else if the packet is for local system */
+	/* 2.2.1  reasemble the packets */
+	/* 2.2.2  goto the upper layer: call exd_in()  */
+	/* 2.3 else: no route to host: drop */
 }
 
 static int test_ipv4_out(struct exdata *data, uint32_t msg_len) {

@@ -4,13 +4,16 @@
 #include <limits.h>
 #include <time.h>
 #include <stdint.h>
+#include <fcntl.h>
 
 #define DAEMON_PORT 11017
 
 #ifdef DEBUG
 #define debug_printf(fmt, ...) fprintf(stderr, "%s(%d)debug: " fmt, __func__, __LINE__, ## __VA_ARGS__)
+#define debug_printf2(fmt, ...) fprintf(stderr, fmt, ## __VA_ARGS__)
 #else
 #define debug_printf(fmt, ...)
+#define debug_printf2(fmt, ...)
 #endif
 
 #define INSERT_TO_LIST_HEAD(h, p) \
@@ -53,17 +56,6 @@ struct proto_info {
 	//struct netdev_ops *exlay_ops;
 };
 
-/* exlay_hdr: packet header for communication between 
- * exlay cli and exlay daemon
- * */
-struct exlay_hdr {
-	uint8_t cmd;
-	uint8_t code;
-	uint16_t len_proto_name; /* or len. of protocol list in the case of CMD_LIST */
-	uint16_t len_proto_path; /* or info. of a protocol in the case of CMD_INFO */
-	uint16_t reserved;
-};
-
 /*
  * MAX data size of exlay payload from daemon to cli in each cmd
  *
@@ -97,11 +89,21 @@ struct exlay_hdr {
 #define CODE_EDLOPEN 0x0b
 #define CODE_EDLSHM 0x0c
 #define CODE_EDIFFBS 0x0d
+#define CODE_EMKFIFO 0x0e
 #define CODE_EBIND 0x0f
 #define CODE_NG  0xff
 
 #define NR_CMDS 6
-#define NR_DAEM_CMDS 5
+
+//#define FILE_MODE (S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH)
+#define FILE_MODE 0777
+#define RDPATHPREFIX "/tmp/r_"
+#define WRPATHPREFIX "/tmp/w_"
+
+#define MAX_PATHLEN 16
+
+#define CONFIG_FILE "./exlay.conf"
+#define MAX_CFG_LINELEN 512
 
 int ex_create_stack(unsigned int nr_layer);
 int ex_set_binding(
@@ -110,7 +112,8 @@ int ex_set_binding(
 		char *proto, 
 		void *lbind,
 		unsigned int bsize, /* binding size */
-		int upper);
+		void *upper, /* binding size */
+		unsigned int upper_s);
 int ex_bind_stack(int ep);
 int ex_set_remote(int ep, int layer, void *binding, unsigned int bsize);
 int ex_dial_stack(int ep);
@@ -120,7 +123,4 @@ int ex_recv_stack(int ep, void *buf, uint32_t size, int opt);
 int ex_close_stack(int ep);
 
 #define RPCSERVER "127.0.0.1" 
-#define MAXPAYLSIZE ( ((MAXPROTNAMELEN * MAXNRPROT) > (MAXPROTNAMELEN + MAXBUFLEN)) ? \
-		(MAXPROTNAMELEN * MAXNRPROT) : (MAXPROTNAMELEN + MAXBUFLEN) )
-
 #endif

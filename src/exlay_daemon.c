@@ -18,6 +18,8 @@
 #include <sys/ioctl.h>
 #include <rpc/pmap_clnt.h>
 #include <net/ethernet.h>
+#include <sys/stat.h>
+#include <pthread.h>
 
 #include "exlay.h"
 #include "protocol.h"
@@ -33,44 +35,100 @@ int daem_sock;
 static int prot_ctr = 0;
 static int list_len = 0;
 static unsigned char exsock = 0;
+pthread_t tid;
+pthread_mutex_t bt_lock = PTHREAD_MUTEX_INITIALIZER;
 
 struct proto_info prinfo_head;
 struct binding_tree root;
-
 
 struct exlay_ep ep_head = {
 	.fp = &ep_head,
 	.bp = &ep_head,
 };
 
-static int bind_cmp(uint8_t *b1, uint8_t *b2, uint32_t bsize)
+void stop_routine(void)
 {
-	int result = 0;
-	uint32_t i;
-	for (i = 0; i < bsize; i++) {
-		if (b1[i] != b2[i]) {
-			/* b1 and d2 are different */
-			result = 1;
-			break;
+	pthread_cancel(tid);
+	int i;
+	char rpath[MAX_PATHLEN] = {0};
+	char wpath[MAX_PATHLEN] = {0};
+	strncat(rpath, RDPATHPREFIX, strlen(RDPATHPREFIX));
+	strncat(wpath, WRPATHPREFIX, strlen(WRPATHPREFIX));
+	for (i = 0; i <= UINT8_MAX; i++) {
+		sprintf(rpath + strlen(RDPATHPREFIX), "%d", i);
+		sprintf(wpath + strlen(WRPATHPREFIX), "%d", i);
+		if (unlink(rpath) == 0) {
+			debug_printf("unlink %s\n", rpath);
+		}
+		if (unlink(wpath) == 0) {
+			debug_printf("unlink %s\n", wpath);
 		}
 	}
-	return result;
+	return;
 }
+
+void term(int sig)
+{
+	printf("stop daemon...\n");
+	stop_routine();
+	printf("done.\n");
+	exit(EXIT_SUCCESS);
+}
+
+void *recv_packet(void *arg)
+{
+	struct exdata exd;
+	exd.data = malloc(2048);
+	uint8_t buf[2048];
+	int ret;
+	while (1) {
+		memset(buf, 0, sizeof(buf));
+		ret = read(daem_sock, buf, sizeof(buf));
+		if (ret < 0) {
+			perror("recv_packet: read:");
+		} else if (root.uplyr != NULL){
+			/* go to exlay stack from the buttom */
+			memcpy(exd.data, buf, ret);
+			exd.datalen = ret;
+			exd.nxt_hdr = exd.data;
+			exd.sock = -1;
+
+			/* only Ethenet is available.
+			 * would like to support other DataLink layer protocol such
+			 * as BLE and WiFi.
+			 * */
+			pthread_mutex_lock(&bt_lock);
+			exd.cur = root.uplyr->fp;
+			root.uplyr->fp->protob->d_input(&exd, (uint32_t)ret);
+			pthread_mutex_unlock(&bt_lock);
+		}
+	}
+}
+
 
 static struct binding_tree *add_protocol_to(
 		struct exlay_layer *lyr,
 		struct binding_tree *lyr_root)
 {
 	struct binding_tree *prt;
-	/* guaranteed that prt_root is not NULL */
+	/* guaranteed that lyr_root is not NULL */
 	
 	prt = malloc(sizeof(struct binding_tree));
 	memset(prt, 0, sizeof(struct binding_tree));
 	prt->protob = lyr->protob;
 	prt->layer = lyr->layer;
-	prt->lower = lyr_root->lower;
+	prt->lolyr = lyr_root->lolyr;
+
+	/* set upper type */
+	if (prt->upper != NULL) {
+		prt->upper = malloc(lyr->protob->upper_type_size);
+		memcpy(prt->upper, lyr->upper, lyr->protob->upper_type_size);
+	}
+
+	/* insert the protocol to the layer list */
 	prt->fp = lyr_root->fp;
 	lyr_root->fp = prt;
+
 	return prt;
 }
 
@@ -108,7 +166,10 @@ static struct binding_tree *add_binding_to(
 	ent->entry = lyr;
 	ent->fbind = prt_root->fbind;
 	ent->layer = lyr->layer;
-	ent->lower = prt_root->lower;
+	ent->lolyr = prt_root->lolyr;
+	ent->upper = lyr->upper;
+
+	/* add this binding in the protocol */
 	prt_root->fbind = ent;
 
 OUT:
@@ -121,9 +182,11 @@ static struct binding_tree *find_binding_in(
 {
 	struct binding_tree *p;
 	unsigned int bsize = ent->protob->bind_size;
+	unsigned int upsize = ent->protob->upper_type_size;
 
 	for (p = prt_root->fbind; p != NULL; p = p->fbind) {
-		if (bind_cmp(p->entry->lbind, ent->lbind, bsize) == 0) {
+		if (bind_cmp(p->entry->lbind, ent->lbind, bsize) == 0 &&
+				upper_cmp(p->entry->upper, ent->upper, upsize) == 0) {
 			return p;
 		}
 	}
@@ -144,7 +207,7 @@ static char *get_libpath(char *proto)
 	return ret;
 }
 
-static int reflect_to_binding_tree(struct exlay_ep *exep)
+static int reflect_to_binding_tree(struct exlay_ep *exep, cli_io *cio)
 {
 	int i;
 	int result = 0;
@@ -154,16 +217,18 @@ static int reflect_to_binding_tree(struct exlay_ep *exep)
 	struct binding_tree *bt; /* point to exlay binding tree structure
 							  *	from the root to the leaf */
 	struct binding_tree *prt;
+	struct binding_tree *prt2;
 							  
 	/* 0. n=1 から初めて u_lyr が定義されたスタックを超えたら終わる
 	 * 1. 第n階層に，使用する bindig が存在するか
-	 * 2. ある → そのノードの upper を取り出す → n++ して 1 へ
+	 * 2. ある → そのノードの uplyr を取り出す → n++ して 1 へ
 	 *    ない → n 階層目に新たなノードを作成して最上位まで upper で辿れるようにして終了 */
 	for (i = 0, bt = &root; i < exep->nr_layers; i++) {
 		u_lyr = &exep->btm[i];
-		if ((prt = find_protocol_in(u_lyr, bt->upper)) == NULL) {
+		prt = find_protocol_in(u_lyr, bt->uplyr);
+		if (prt == NULL) {
 			/* not found, the protocol can be added. */
-			if (bt->upper == NULL) {
+			if (bt->uplyr == NULL) {
 				/* there are no upper protocols */
 				struct binding_tree *lyr_root;
 				lyr_root = (struct binding_tree *)malloc(sizeof(struct binding_tree));
@@ -173,27 +238,119 @@ static int reflect_to_binding_tree(struct exlay_ep *exep)
 				}
 				memset(lyr_root, 0, sizeof(struct binding_tree));
 				lyr_root->layer = i + 1;
-				bt->upper = lyr_root;
-				lyr_root->lower = bt;
+				bt->uplyr = lyr_root;
+				lyr_root->lolyr = bt;
 			}
-			prt = add_protocol_to(u_lyr, bt->upper);
-			prt = add_binding_to(u_lyr, prt);
-		} else if ((prt = find_binding_in(u_lyr, prt)) == NULL) {
+			prt2 = add_protocol_to(u_lyr, bt->uplyr);
+			prt = add_binding_to(u_lyr, prt2);
+		} else if ((prt2 = find_binding_in(u_lyr, prt)) == NULL) {
 			/* u_lyr binding is not found in the bt layer */
 			prt = add_binding_to(u_lyr, prt);
 		} else if (i == exep->nr_layers - 1) {
 			/* all requested bindings have already exist
 			 * return error value */
 			result = -CODE_EBIND;
-		}
+		} 
 		bt = prt;
 	}
+
 	exep->topb = bt;
+	bt->is_top = 1;
+
+	char str_ep[MAX_PATHLEN - strlen(RDPATHPREFIX)];
+	memset(str_ep, 0, sizeof(str_ep));
+	sprintf(str_ep, "%d", exep->ep);
+
+	/* create read & write fifos for transfer message */
+	strncat(cio->rpath, RDPATHPREFIX, strlen(RDPATHPREFIX));
+	strncat(cio->rpath, str_ep, strlen(str_ep));
+	if (mkfifo(cio->rpath, FILE_MODE) < 0) {
+		perror("mkfifo");
+		cio->code = -CODE_EMKFIFO;
+		goto OUT;
+	}
+	bt->app_r = open(cio->rpath, O_RDWR);
+	if (bt->app_r < 0) {
+		perror("open");
+		cio->code = -errno;
+		goto OUT;
+	}
+	strncat(cio->wpath, WRPATHPREFIX, strlen(WRPATHPREFIX));
+	strncat(cio->wpath, str_ep, strlen(str_ep));
+	if (mkfifo(cio->wpath, FILE_MODE) < 0) {
+		perror("mkfifo");
+		cio->code = -CODE_EMKFIFO;
+		goto OUT;
+	}
+	bt->app_w = open(cio->wpath, O_RDWR);
+	if (bt->app_w < 0) {
+		perror("open");
+		cio->code = -errno;
+		goto OUT;
+	}
+	cio->code = result;
+
+OUT:
 	return result;
 }
 static int init_exlay(void)
 {
 	memset(&root, 0, sizeof(struct binding_tree));
+	prinfo_head.fp = &prinfo_head;
+	prinfo_head.bp = &prinfo_head;
+
+	char *err;
+	char *name;
+	char *path;
+	FILE *fp;
+	char *p;
+	char buf[MAX_CFG_LINELEN] = {0};
+	int line = 0;
+	fp = fopen(CONFIG_FILE, "r");
+	if (fp == NULL) {
+		perror("fopen: init_exlay");
+		exit(errno);
+	}
+
+	while (fgets(buf, MAX_CFG_LINELEN, fp) != NULL) {
+		line++;
+		if (buf[strlen(buf)] == MAX_CFG_LINELEN-1 && buf[strlen(buf)] != '\n') {
+			fprintf(stderr, "protocol name or path is too long: line %d\n", line);
+			fclose(fp);
+			exit(EXIT_FAILURE);
+		}
+
+		int i;
+		name = &buf[3];
+		for (i = 0; i < strlen(buf); i++) {
+			if (buf[i] == ' ') {
+				buf[i] = '\0';
+				path = &buf[i+1];
+				path[strlen(path)-1] = '\0';
+				break;
+			}
+		}
+
+		struct proto_info *new_prt;
+		new_prt = (struct proto_info *)malloc(sizeof(struct proto_info));
+		new_prt->path = malloc(strlen(path));
+		memcpy(new_prt->path, path, strlen(path));
+		new_prt->name = malloc(strlen(name));
+		memcpy(new_prt->name, name, strlen(name));
+
+		dlopen(new_prt->path, RTLD_LAZY|RTLD_GLOBAL);
+		if ((err = dlerror()) != NULL) {
+			fputs(err, stderr);
+			putchar('\n');
+			exit(EXIT_FAILURE);
+		}
+		INSERT_TO_LIST_HEAD(&prinfo_head, new_prt);
+		debug_printf("prot %s (%s) was successfully added\n", 
+				new_prt->name, new_prt->path);
+		prot_ctr++;
+		list_len += (strlen(name) + 1);
+
+	}
 	return 0;
 }
 
@@ -264,7 +421,6 @@ int init_daemon(char *ifname)
 		return errno;
 	}
 
-	prinfo_head.fp = &prinfo_head;
 
 	return 0;
 }
@@ -294,6 +450,15 @@ int main(int argc, char **argv)
 		fprintf (stderr, "%s", "unable to register (EXLAYPROG, EXLAYVERS, udp).");
 		exit(1);
 	}
+
+	pthread_attr_t attr;
+
+	signal(SIGPIPE, SIG_IGN);
+	signal(SIGTERM, term);
+	signal(SIGINT, term);
+	signal(SIGQUIT, term);
+	pthread_attr_init(&attr);
+	pthread_create(&tid,&attr, recv_packet, NULL);
 
 	svc_run();
 	fprintf (stderr, "%s", "svc_run returned");
@@ -325,8 +490,7 @@ int *ex_set_binding_1_svc(
 		unsigned int lyr, 
 		char *proto, 
 		binding lbind, 
-		unsigned int bsize, 
-		int upper, 
+		upper upr, 
 		struct svc_req *rqstp)
 {
 	static int result;
@@ -375,7 +539,7 @@ int *ex_set_binding_1_svc(
 
 	/* set requested binding */
 	uint8_t size = exep->btm[lyr-1].protob->bind_size;
-	if (bsize != size && size != 0) {
+	if (lbind.binding_len != size && size != 0) {
 		/* specify different binding size between 
 		 * protocol library and user definion 
 		 * */
@@ -387,9 +551,11 @@ int *ex_set_binding_1_svc(
 	}
 
 	uint8_t uplyr_type_s = exep->btm[lyr-1].protob->upper_type_size;
-	if (upper != 0) {
+
+	if (upr.upper_len != 0) {
 		exep->btm[lyr-1].upper = malloc(uplyr_type_s);
-		memcpy(exep->btm[lyr-1].upper, &upper, uplyr_type_s);
+		memcpy(exep->btm[lyr-1].upper, upr.upper_val, uplyr_type_s); 
+
 	} else {
 		exep->btm[lyr-1].upper = NULL;
 	}
@@ -399,18 +565,35 @@ OUT:
 
 }
 
-int *ex_bind_stack_1_svc(int exsock, struct svc_req *rqstp)
+cli_io *ex_bind_stack_1_svc(int exsock, struct svc_req *rqstp)
 {
-	static int result = 0;
+	static cli_io result;
+	static char is_freeable = 0;
+
+	if (is_freeable) {
+		free(result.rpath);
+		free(result.wpath);
+		is_freeable = 0;
+	} 
+	result.code = 0;
+	result.rpath = (char *)malloc(MAX_PATHLEN);
+	memset(result.rpath, 0, MAX_PATHLEN);
+	result.wpath = (char *)malloc(MAX_PATHLEN);
+	memset(result.wpath, 0, MAX_PATHLEN);
+	is_freeable = 1;
+	
 	struct exlay_ep *exep;
 	exep = get_ep_from_sock(exsock);
 	if (exep == NULL) {
 		/* no such endpoint */
-		result = -CODE_NEXEP;
+		result.code = -CODE_NEXEP;
 		goto OUT;
 	}
 	/* reflect stack to binding_tree */
-	result = reflect_to_binding_tree(exep);
+	int ret;
+	pthread_mutex_lock(&bt_lock);
+	ret = reflect_to_binding_tree(exep, &result);
+	pthread_mutex_unlock(&bt_lock);
 
 OUT:
 	return &result;
@@ -525,8 +708,20 @@ int *ex_recv_stack_1_svc(int ep, msg buf, int opt, struct svc_req *rqstp)
 {
 	static int result;
 	result = 0;
-	//debug_printf("msg: %s\n", buf.msg_val);
-	result = buf.msg_len;
+
+	struct exlay_ep *p;
+	uint32_t total_hdr_size;
+	p = get_ep_from_sock(ep);
+	if (p == NULL) {
+		/* no such exlay endpoint */
+		result = -CODE_NEXEP;
+		goto OUT;
+	}
+	struct exdata exd;
+	total_hdr_size = reqired_bufsize(p);
+	exd.data = (uint8_t *)malloc(total_hdr_size + buf.msg_len);
+	
+OUT:
 	return &result;
 }
 
