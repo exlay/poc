@@ -84,7 +84,7 @@ int main(int argc, char **argv)
 	assert(ret >= 0);
 	while (1) {
 		memset(buf, 0, sizeof(buf));
-		ret = ex_recv_stack(exsock, buf, strlen(STRING), 0);
+		ret = ex_recv_stack(exsock, buf, 100, 0);
 		printf("recv: %s (%d byte))", buf, ret);
 	}
 

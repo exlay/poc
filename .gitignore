@@ -8,8 +8,8 @@ tags
 *.out
 core
 
-exlay_daemon
-exlay
+bin/exlay_daemon
+bin/exlay
 test
 
 exlay_rpc_clnt.c
