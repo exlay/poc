@@ -1,23 +1,113 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -ggdb -g3
+CFLAGS = -Wall -Wextra -ggdb -g3 -MMD -MP -fPIC
 CFLAGS += -DDEBUG
-LDFLAGS =
+LDFLAGS = -lexlay -ldl
+LIBRARY = -L./lib
 
-SRC = exlay_daemon.c exlay.c
-OBJ = $(%.o:%.c)
+TOPDIR = $(CURDIR)
+TARGETS = exlay_daemon exlay 
+SRCDIR = ./src
+OBJDIR = ./build
+BINDIR = ./bin
+INCDIR = ./include
+LIBDIR = $(CURDIR)/lib
 
-.PHONY: clean tag all
+XDRSRC = exlay_rpc.x
+XDRSVC = $(XDRSRC:%.x=%_svc.c)
+XDRCLNT = $(XDRSRC:%.x=%_clnt.c)
+XDRXDR = $(XDRSRC:%.x=%_xdr.c)
+XDRHDR = $(XDRSRC:%.x=%.h)
 
-TARGETS = exlay_daemon exlay
+XDROUTS = $(INCDIR)/$(XDRHDR) \
+		  $(SRCDIR)/$(XDRSVC) \
+		  $(SRCDIR)/$(XDRCLNT) \
+		  $(SRCDIR)/$(XDRXDR) \
+		  $(OBJDIR)/$(XDRSVC:%.c=%.o) \
+		  $(OBJDIR)/$(XDRCLNT:%.c=%.o) \
+		  $(OBJDIR)/$(XDRXDR:%.c=%.o) 
 
-.c.o:
-	$(CC) $(CFLAGS) -c $<
+EXLAYCLI = $(BINDIR)/exlay
+CLIOBJS = $(addprefix $(OBJDIR)/,$(XDRXDR:%.c=%.o) $(XDRCLNT:%.c=%.o) exlay.o)
 
-all: $(TARGETS)
+EXLAYDAEMON = $(BINDIR)/exlay_daemon
+DAEMONOBJS = $(addprefix $(OBJDIR)/,$(XDRXDR:%.c=%.o) $(XDRSVC:%.c=%.o) exlay_daemon.o)
 
-tag: tags cscope.out
+RM = rm -rf
+RMDIR = rmdir
+
+TAGS = tags cscope.out
+
+SRCS = $(wildcard $(SRCDIR)/*.c)
+OBJS = $(addprefix $(OBJDIR)/,$(notdir $(SRCS:%.c=%.o)))
+DEPS = $(OBJS:%.o=%.d)
+BINS = $(addprefix $(BINDIR)/,$(TARGETS))
+INCLUDE = $(addprefix -I,$(INCDIR))
+
+LIB = $(LIBDIR)/libexlay.so $(LIBDIR)/libproto.so
+PLIBDIR = $(CURDIR)/protocols/lib
+
+CONF_LIBPATHS = $(wildcard $(PLIBDIR)/*.so)
+CONF_LIBNAMES = $(notdir $(basename $(CONF_LIBPATHS)))
+CONF_TMP = $(addsuffix "\t",$(CONF_LIBNAMES))
+CONF_PAIRS = $(join $(CONF_TMP), $(CONF_LIBPATHS))
+
+SRCFS = $(notdir $(SRCS))
+OBJFS = $(SRCFS:%.c=%.o)
+DEPFS = $(SRCFS:%.c=%.d)
+
+.PHONY: clean tag all rpc sample protocols exlay
+.PRECIOUS: $(OBJS) $(DEPS)
+
+all: exlay protocols sample
+
+exlay: $(XDROUTS) $(LIB) $(BINS)
+
+protocols:
+	+make -C ./protocols
+
+sample:
+	+make -C ./sample
+
+$(EXLAYCLI): $(CLIOBJS)
+	if [ ! -d "$(BINDIR)" ]; then mkdir $(BINDIR); fi
+	$(CC) $(CFLAGS) $(LIBRARY) -o $@ $^ $(LDFLAGS)
+
+$(EXLAYDAEMON): $(DAEMONOBJS)
+	if [ ! -d "$(BINDIR)" ]; then mkdir $(BINDIR); fi
+	$(CC) $(CFLAGS) $(LIBRARY) -o $@ $^ $(LDFLAGS) -lproto -pthread
+
+$(OBJDIR)/%.o: $(SRCDIR)/%.c
+	if [ ! -d "$(OBJDIR)" ]; then mkdir $(OBJDIR); fi
+	$(CC) $(CFLAGS) -o $@ -c $< $(INCLUDE)
+
+$(LIBDIR)/%.so: $(OBJDIR)/%.o $(OBJDIR)/$(XDRCLNT:%.c=%.o) $(OBJDIR)/$(XDRXDR:%.c=%.o)
+	if [ ! -d $(LIBDIR) ]; then mkdir $(LIBDIR); fi
+	$(CC) -shared -Wl,-soname,$(LIBDIR)/$(notdir $@),-rpath,$(PLIBDIR) -o $@ $^
+
+$(INCDIR)/%.h: $(SRCDIR)/%.x
+	cd $(SRCDIR) && rpcgen -Nh $(notdir $<) > ../$@
+
+$(SRCDIR)/%_svc.c: $(SRCDIR)/%.x
+	cd $(SRCDIR) && rpcgen -Nm $(notdir $<) > ../$@
+
+$(SRCDIR)/%_clnt.c: $(SRCDIR)/%.x
+	cd $(SRCDIR) && rpcgen -Nl $(notdir $<) > ../$@
+
+$(SRCDIR)/%_xdr.c: $(SRCDIR)/%.x
+	cd $(SRCDIR) && rpcgen -Nc $(notdir $<) > ../$@
+
+config: exlay.conf
+	@echo $(CONF_PAIRS) | xargs -n2 > $<
+
+tag:
 	ctags -R
 	cscope -Rb
 
 clean:
-	rm -rf *.o $(TARGETS)
+	$(RM) $(OBJS) $(DEPS) $(BINS) $(LIB) $(XDROUTS) $(TAGS)
+	-$(RMDIR) $(OBJDIR) $(BINDIR) $(LIBDIR)
+	-echo -n "" > exlay.conf
+	make -C ./protocols clean
+	make -C ./sample clean
+
+-include $(DEPS)

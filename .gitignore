@@ -6,6 +6,19 @@ a.out
 
 tags
 *.out
+core
 
 exlay_daemon
 exlay
+test
+
+exlay_rpc_clnt.c
+exlay_rpc_svc.c
+exlay_rpc_xdr.c
+exlay_rpc.h
+
+.gdbinit
+build/
+bin/
+*.so
+*.d
