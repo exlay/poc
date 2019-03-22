@@ -99,8 +99,6 @@ $(SRCDIR)/%_xdr.c: $(SRCDIR)/%.x
 config: exlay.conf
 	@echo $(CONF_PAIRS) | xargs -n2 > $<
 
-
-
 tag:
 	ctags -R
 	cscope -Rb
@@ -108,6 +106,7 @@ tag:
 clean:
 	$(RM) $(OBJS) $(DEPS) $(BINS) $(LIB) $(XDROUTS) $(TAGS)
 	-$(RMDIR) $(OBJDIR) $(BINDIR) $(LIBDIR)
+	-echo -n "" > exlay.conf
 	make -C ./protocols clean
 	make -C ./sample clean
 

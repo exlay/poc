@@ -7,11 +7,15 @@ LIBDIR = ../lib
 INCDIRS := ../include
 INCLUDE = $(addprefix -I,$(INCDIRS))
 
-BASES := $(filter-out include Makefile lib protolib.map,$(wildcard *))
+#LIBLIST := $(filter-out include Makefile lib protolib.map,$(wildcard *))
+LIBLIST := \
+	test_arp \
+	test_ethernet \
+	test_ipv4
 
 LINKDIR := $(CURDIR)/lib
 
-OBJS := $(join $(addsuffix /,$(BASES)),$(BASES:%=%.o))
+OBJS := $(join $(addsuffix /,$(LIBLIST)),$(LIBLIST:%=%.o))
 DEPS := $(OBJS:%.o=%.d)
 SRCS := $(OBJS:%.o=%.c)
 LIBS := $(OBJS:%.o=%.so)
