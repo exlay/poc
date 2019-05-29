@@ -20,8 +20,8 @@
 
 int main(int argc, char **argv)
 {
-	if (argc != 2) {
-		fprintf(stderr, "usage: write_ether <ifname>\n");
+	if (argc != 3) {
+		fprintf(stderr, "usage: write_ether <ifname> <msg>\n");
 		exit(1);
 	}
 	
@@ -89,10 +89,9 @@ int main(int argc, char **argv)
 #endif
 	eh.ether_type = htons(TYPE); 
 	char data[100] = {0};
-	char *msg = "hello, world";
 
 	memcpy(data, &eh, sizeof(struct ether_header));
-	memcpy(data+sizeof(struct ether_header), msg, strlen(msg));
+	memcpy(data+sizeof(struct ether_header), argv[2], strlen(argv[2]));
 
 	printf("ifname: %s\n", argv[1]);
 	printf("dhost: %.2x:%.2x:%.2x:%.2x:%.2x:%.2x\n",

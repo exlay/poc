@@ -308,8 +308,11 @@ static int init_exlay(void)
 	int line = 0;
 	fp = fopen(CONFIG_FILE, "r");
 	if (fp == NULL) {
-		perror("fopen: init_exlay");
-		exit(errno);
+		if (errno != ENOENT) {
+			perror("fopen: init_exlay");
+			exit(errno);
+		}
+		perror("fopen");
 	}
 
 	while (fgets(buf, MAX_CFG_LINELEN, fp) != NULL) {
@@ -553,8 +556,16 @@ int *ex_set_binding_1_svc(
 
 	uint8_t uplyr_type_s = exep->btm[lyr-1].protob->upper_type_size;
 
+	/* TODO: adapt network order */
 	if (upr.upper_len != 0) {
 		exep->btm[lyr-1].upper = malloc(uplyr_type_s);
+		int i;
+#ifdef DEBUG
+		for (i = 0; i < uplyr_type_s; i++) {
+			debug_printf2("%02x ", (uint8_t)upr.upper_val[i]);
+		}
+		debug_printf2("\n");
+#endif
 		memcpy(exep->btm[lyr-1].upper, upr.upper_val, uplyr_type_s); 
 
 	} else {
